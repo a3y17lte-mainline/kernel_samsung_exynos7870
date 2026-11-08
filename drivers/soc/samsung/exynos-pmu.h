@@ -23,6 +23,7 @@ struct exynos_pmu_data {
 	const struct exynos_pmu_conf *pmu_config_extra;
 	bool pmu_secure;
 	bool pmu_cpuhp;
+	bool pmu_cpu_pwr_cfg;
 
 	void (*pmu_init)(void);
 	void (*powerdown_conf)(enum sys_powerdown);
