@@ -753,6 +753,15 @@ static const struct samsung_cmu_info mif_cmu_info __initconst = {
 	.nr_clk_ids		= MIF_NR_CLK,
 };
 
+static void __init exynos7870_cmu_mif_init(struct device_node *np)
+{
+	exynos_arm64_register_cmu(NULL, np, &mif_cmu_info);
+}
+
+/* Register CMU_MIF early, as CMU_PERI needs it */
+CLK_OF_DECLARE(exynos7870_cmu_mif, "samsung,exynos7870-cmu-mif",
+	       exynos7870_cmu_mif_init);
+
 /* PLL rates and CPU divider settings, shared by both CPU clusters */
 static const struct samsung_pll_rate_table cpucl_pll_rates[] __initconst = {
 	PLL_35XX_RATE(26 * MHZ, 2002000000U, 231, 3, 0),
@@ -2094,6 +2103,15 @@ static const struct samsung_cmu_info peri_cmu_info __initconst = {
 	.nr_clk_ids		= PERI_NR_CLK,
 };
 
+static void __init exynos7870_cmu_peri_init(struct device_node *np)
+{
+	exynos_arm64_register_cmu(NULL, np, &peri_cmu_info);
+}
+
+/* Register CMU_PERI early, as it's needed for MCT timer */
+CLK_OF_DECLARE(exynos7870_cmu_peri, "samsung,exynos7870-cmu-peri",
+	       exynos7870_cmu_peri_init);
+
 static int __init exynos7870_cmu_probe(struct platform_device *pdev)
 {
 	const struct samsung_cmu_info *info;
@@ -2107,9 +2125,6 @@ static int __init exynos7870_cmu_probe(struct platform_device *pdev)
 
 static const struct of_device_id exynos7870_cmu_of_match[] = {
 	{
-		.compatible = "samsung,exynos7870-cmu-mif",
-		.data = &mif_cmu_info,
-	}, {
 		.compatible = "samsung,exynos7870-cmu-cpucl0",
 		.data = &cpucl0_cmu_info,
 	}, {
@@ -2130,9 +2145,6 @@ static const struct of_device_id exynos7870_cmu_of_match[] = {
 	}, {
 		.compatible = "samsung,exynos7870-cmu-mfcmscl",
 		.data = &mfcmscl_cmu_info,
-	}, {
-		.compatible = "samsung,exynos7870-cmu-peri",
-		.data = &peri_cmu_info,
 	}, {
 	},
 };
