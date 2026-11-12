@@ -118,6 +118,13 @@ enum s2mu004_reg {
 
 /* S2MU004_REG_MUIC_CTRL1 */
 #define S2MU004_MUIC_IRQ_MASK		BIT(0)
+#define S2MU004_MUIC_MANUAL_SW_N	BIT(2)	/* 0: the switches are set by hand */
+#define S2MU004_MUIC_SWITCH_OPEN_N	BIT(4)	/* 0: all switches open */
+
+/* S2MU004_REG_MUIC_SWCTRL */
+#define S2MU004_MUIC_SW_DM		GENMASK(4, 2)
+#define S2MU004_MUIC_SW_DP		GENMASK(7, 5)
+#define S2MU004_MUIC_SW_USB		1
 
 /* S2MU004_REG_MUIC_RIDCTRL */
 #define S2MU004_MUIC_RID_ADC_OFF	BIT(1)
