@@ -24,6 +24,7 @@ struct exynos_pmu_data {
 	bool pmu_secure;
 	bool pmu_cpuhp;
 	bool pmu_cpu_pwr_cfg;
+	bool pmu_cluster_seq;
 
 	void (*pmu_init)(void);
 	void (*powerdown_conf)(enum sys_powerdown);
