@@ -16,6 +16,7 @@ obj-$(CONFIG_MAG3110)	+= mag3110.o
 obj-$(CONFIG_HID_SENSOR_MAGNETOMETER_3D) += hid-sensor-magn-3d.o
 obj-$(CONFIG_MMC35240)	+= mmc35240.o
 
+obj-$(CONFIG_IIO_SSP_SENSORS_COMMONS) += ssp_magn_sensor.o
 obj-$(CONFIG_IIO_ST_MAGN_3AXIS) += st_magn.o
 st_magn-y := st_magn_core.o
 st_magn-$(CONFIG_IIO_BUFFER) += st_magn_buffer.o
