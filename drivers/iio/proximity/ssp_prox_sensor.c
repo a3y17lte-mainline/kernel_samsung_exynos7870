@@ -192,7 +192,7 @@ static int ssp_prox_write_event_config(struct iio_dev *indio_dev,
 		return ret;
 	}
 
-	if (!iio_device_try_claim_buffer_mode(indio_dev))
+	if (iio_device_claim_buffer_mode(indio_dev))
 		return -EBUSY;
 	ret = ssp_prox_set_events(indio_dev, state, true);
 	iio_device_release_buffer_mode(indio_dev);
