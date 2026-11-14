@@ -17,6 +17,16 @@
 / {
 	model = "Samsung Galaxy A3 (2017)";
 	compatible = "samsung,a3y17lte", "samsung,exynos7870";
+
+	/*
+	 * S-Boot picks the DTB from the DTBH table in boot.img by these, and
+	 * fails without them. Values from the stock rev02 DTB of this unit.
+	 */
+	model_info-chip = <7870>;
+	model_info-platform = "android";
+	model_info-subtype = "samsung";
+	model_info-hw_rev = <2>;
+	model_info-hw_rev_end = <255>;
 	chassis-type = "handset";
 
 	aliases {
@@ -958,6 +968,8 @@
 	wifi@1 {
 		compatible = "qcom,ath10k";
 		reg = <1>;
+		/* made up: the real address is in EFS, which Android does not use */
+		mac-address = [02 a3 17 00 00 02];
 	};
 };
 
@@ -1308,6 +1320,8 @@
 
 	bluetooth {
 		compatible = "qcom,qca9377-bt";
+		/* 02:A3:17:00:00:01, made up like the Wi-Fi address (byte-reversed) */
+		local-bd-address = [01 00 00 17 a3 02];
 		pinctrl-0 = <&bt_enable>;
 		pinctrl-names = "default";
 
