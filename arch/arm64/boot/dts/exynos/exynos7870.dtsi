@@ -29,6 +29,31 @@
 		pinctrl7 = &pinctrl_touch;
 	};
 
+	/*
+	 * The INT and DISP buses share BUCK2 with the GPU and the memory
+	 * interface. Nothing measures their load: like the vendor kernel, they
+	 * run at their lowest level unless a QoS request asks for more.
+	 */
+	bus_disp: bus-disp {
+		compatible = "samsung,exynos-bus";
+		clocks = <&cmu_mif CLK_GOUT_MIF_CMU_DISPAUD_BUS>;
+		clock-names = "bus";
+		operating-points-v2 = <&bus_disp_opp_table>;
+		status = "disabled";
+	};
+
+	/* FSYS_BUS is the only INT clock with users; MFC and MSCL stay low. */
+	bus_int: bus-int {
+		compatible = "samsung,exynos-bus";
+		clocks = <&cmu_mif CLK_GOUT_MIF_CMU_FSYS_BUS>;
+		clock-names = "bus";
+		assigned-clocks = <&cmu_mif CLK_DOUT_MIF_CMU_MFCMSCL_MFC>,
+				  <&cmu_mif CLK_DOUT_MIF_CMU_MFCMSCL_MSCL>;
+		assigned-clock-rates = <133250000>, <133250000>;
+		operating-points-v2 = <&bus_int_opp_table>;
+		status = "disabled";
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -389,6 +414,39 @@
 		opp-1001000000 {
 			opp-hz = /bits/ 64 <1001000000>;
 			opp-microvolt = <1006250 1006250 1006250>;
+		};
+	};
+
+	bus_int_opp_table: opp-table-3 {
+		compatible = "operating-points-v2";
+
+		opp-133250000 {
+			opp-hz = /bits/ 64 <133250000>;
+			opp-microvolt = <781250 781250 1300000>;
+		};
+
+		opp-159900000 {
+			opp-hz = /bits/ 64 <159900000>;
+			opp-microvolt = <812500 812500 1300000>;
+		};
+
+		opp-199875000 {
+			opp-hz = /bits/ 64 <199875000>;
+			opp-microvolt = <825000 825000 1300000>;
+		};
+	};
+
+	bus_disp_opp_table: opp-table-4 {
+		compatible = "operating-points-v2";
+
+		opp-133250000 {
+			opp-hz = /bits/ 64 <133250000>;
+			opp-microvolt = <800000 800000 1300000>;
+		};
+
+		opp-199875000 {
+			opp-hz = /bits/ 64 <199875000>;
+			opp-microvolt = <843750 843750 1300000>;
 		};
 	};
 
