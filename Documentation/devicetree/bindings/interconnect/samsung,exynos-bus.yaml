@@ -180,7 +180,8 @@ properties:
     maxItems: 4
     description:
       Devfreq-event device to monitor the current utilization of buses. Valid
-      and required only for the parent bus devices.
+      only for the parent bus devices. A parent bus device without it runs at
+      its lowest frequency unless a bandwidth request asks for more.
 
   exynos,saturation-ratio:
     $ref: /schemas/types.yaml#/definitions/uint32
