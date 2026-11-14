@@ -45,6 +45,15 @@ static unsigned int get_reboot_mode_magic(struct reboot_mode_driver *reboot,
 		if (!strcmp(info->mode, cmd_))
 			return info->magic;
 
+	/*
+	 * Android passes its reboot reason as the command ("userrequested",
+	 * "shell", "userrequested,recovery,ui" from the recovery menu, ...):
+	 * anything that is not a mode is a normal reboot.
+	 */
+	list_for_each_entry(info, &reboot->head, list)
+		if (!strcmp(info->mode, normal))
+			return info->magic;
+
 	return 0;
 }
 
