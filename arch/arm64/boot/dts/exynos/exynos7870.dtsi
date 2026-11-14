@@ -656,6 +656,14 @@
 			};
 		};
 
+		pd_isp: power-domain@10484040 {
+			compatible = "samsung,exynos7870-pd",
+				     "samsung,exynos5433-pd";
+			reg = <0x10484040 0x20>;
+			#power-domain-cells = <0>;
+			label = "isp";
+		};
+
 		gic: interrupt-controller@104e1000 {
 			compatible = "arm,cortex-a15-gic";
 			reg = <0x104e1000 0x1000>,
@@ -1248,6 +1256,20 @@
 				 <&cmu_mif CLK_GOUT_MIF_CMU_ISP_ISP>,
 				 <&cmu_mif CLK_GOUT_MIF_CMU_ISP_VRA>;
 			clock-names = "oscclk", "cam", "isp", "vra";
+			/* Keep the inputs at their lowest level while unused */
+			assigned-clocks = <&cmu_mif CLK_MOUT_MIF_CMU_ISP_CAM>,
+					  <&cmu_mif CLK_MOUT_MIF_CMU_ISP_ISP>,
+					  <&cmu_mif CLK_MOUT_MIF_CMU_ISP_VRA>,
+					  <&cmu_mif CLK_DOUT_MIF_CMU_ISP_CAM>,
+					  <&cmu_mif CLK_DOUT_MIF_CMU_ISP_ISP>,
+					  <&cmu_mif CLK_DOUT_MIF_CMU_ISP_VRA>;
+			assigned-clock-parents = <&cmu_mif CLK_FFAC_MIF_MUX_MEDIA_PLL_DIV2>,
+						 <&cmu_mif CLK_FFAC_MIF_MUX_MEDIA_PLL_DIV2>,
+						 <&cmu_mif CLK_FFAC_MIF_MUX_MEDIA_PLL_DIV2>;
+			assigned-clock-rates = <0>, <0>, <0>,
+					       <166562500>, <166562500>,
+					       <166562500>;
+			power-domains = <&pd_isp>;
 		};
 
 		syscon_cam0: system-controller@144f1040 {
