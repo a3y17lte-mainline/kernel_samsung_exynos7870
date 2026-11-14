@@ -2968,6 +2968,20 @@ int dev_pm_opp_adjust_voltage(struct device *dev, unsigned long freq,
 	if (IS_ERR(opp))
 		return PTR_ERR(opp);
 
+	/*
+	 * The device keeps running at the current OPP until its next change,
+	 * which may never come: apply the new voltage of the active OPP now.
+	 */
+	if (opp_table->enabled && opp_table->current_opp == opp &&
+	    opp_table->config_regulators) {
+		r = opp_table->config_regulators(dev, opp, opp,
+						 opp_table->regulators,
+						 opp_table->regulator_count);
+		if (r)
+			dev_warn(dev, "%s: failed to apply voltage: %d\n",
+				 __func__, r);
+	}
+
 	/* Notify the voltage change of the OPP */
 	blocking_notifier_call_chain(&opp_table->head, OPP_EVENT_ADJUST_VOLTAGE,
 				     opp);
