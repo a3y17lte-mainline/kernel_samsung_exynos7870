@@ -415,6 +415,15 @@ static int devfreq_passive_event_handler(struct devfreq *devfreq,
 		else if (p_data->parent_type == CPUFREQ_PARENT_DEV)
 			WARN_ON(cpufreq_passive_unregister_notifier(devfreq));
 		break;
+	case DEVFREQ_GOV_RESUME:
+		/*
+		 * Resume leaves the device at its suspend frequency: follow
+		 * the parent again without waiting for its next change.
+		 */
+		mutex_lock(&devfreq->lock);
+		ret = devfreq_update_target(devfreq, 0L);
+		mutex_unlock(&devfreq->lock);
+		break;
 	default:
 		break;
 	}
