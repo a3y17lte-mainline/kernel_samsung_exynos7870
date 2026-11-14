@@ -215,78 +215,91 @@
 			opp-hz = /bits/ 64 <342875000>;
 			opp-microvolt = <687500 687500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_274625000>;
 		};
 
 		opp-448500000 {
 			opp-hz = /bits/ 64 <448500000>;
 			opp-microvolt = <712500 712500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_274625000>;
 		};
 
 		opp-546000000 {
 			opp-hz = /bits/ 64 <546000000>;
 			opp-microvolt = <743750 743750 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_451100000>;
 		};
 
 		opp-676000000 {
 			opp-hz = /bits/ 64 <676000000>;
 			opp-microvolt = <775000 775000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_451100000>;
 		};
 
 		opp-756600000 {
 			opp-hz = /bits/ 64 <756600000>;
 			opp-microvolt = <806250 806250 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_546000000>;
 		};
 
 		opp-838500000 {
 			opp-hz = /bits/ 64 <838500000>;
 			opp-microvolt = <837500 837500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_546000000>;
 		};
 
 		opp-902200000 {
 			opp-hz = /bits/ 64 <902200000>;
 			opp-microvolt = <875000 875000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_676000000>;
 		};
 
 		opp-1014000000 {
 			opp-hz = /bits/ 64 <1014000000>;
 			opp-microvolt = <900000 900000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_728000000>;
 		};
 
 		opp-1144000000 {
 			opp-hz = /bits/ 64 <1144000000>;
 			opp-microvolt = <950000 950000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_728000000>;
 		};
 
 		opp-1248000000 {
 			opp-hz = /bits/ 64 <1248000000>;
 			opp-microvolt = <1000000 1000000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_835250000>;
 		};
 
 		opp-1352000000 {
 			opp-hz = /bits/ 64 <1352000000>;
 			opp-microvolt = <1050000 1050000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_835250000>;
 		};
 
 		opp-1482000000 {
 			opp-hz = /bits/ 64 <1482000000>;
 			opp-microvolt = <1112500 1112500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_902200000>;
 		};
 
 		opp-1586000000 {
 			opp-hz = /bits/ 64 <1586000000>;
 			opp-microvolt = <1175000 1175000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_902200000>;
 		};
 	};
 
@@ -298,78 +311,91 @@
 			opp-hz = /bits/ 64 <342875000>;
 			opp-microvolt = <687500 687500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_274625000>;
 		};
 
 		opp-448500000 {
 			opp-hz = /bits/ 64 <448500000>;
 			opp-microvolt = <712500 712500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_274625000>;
 		};
 
 		opp-546000000 {
 			opp-hz = /bits/ 64 <546000000>;
 			opp-microvolt = <743750 743750 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_451100000>;
 		};
 
 		opp-676000000 {
 			opp-hz = /bits/ 64 <676000000>;
 			opp-microvolt = <775000 775000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_451100000>;
 		};
 
 		opp-756600000 {
 			opp-hz = /bits/ 64 <756600000>;
 			opp-microvolt = <806250 806250 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_546000000>;
 		};
 
 		opp-838500000 {
 			opp-hz = /bits/ 64 <838500000>;
 			opp-microvolt = <837500 837500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_546000000>;
 		};
 
 		opp-902200000 {
 			opp-hz = /bits/ 64 <902200000>;
 			opp-microvolt = <875000 875000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_676000000>;
 		};
 
 		opp-1014000000 {
 			opp-hz = /bits/ 64 <1014000000>;
 			opp-microvolt = <900000 900000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_728000000>;
 		};
 
 		opp-1144000000 {
 			opp-hz = /bits/ 64 <1144000000>;
 			opp-microvolt = <950000 950000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_728000000>;
 		};
 
 		opp-1248000000 {
 			opp-hz = /bits/ 64 <1248000000>;
 			opp-microvolt = <1000000 1000000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_835250000>;
 		};
 
 		opp-1352000000 {
 			opp-hz = /bits/ 64 <1352000000>;
 			opp-microvolt = <1050000 1050000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_835250000>;
 		};
 
 		opp-1482000000 {
 			opp-hz = /bits/ 64 <1482000000>;
 			opp-microvolt = <1112500 1112500 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_902200000>;
 		};
 
 		opp-1586000000 {
 			opp-hz = /bits/ 64 <1586000000>;
 			opp-microvolt = <1175000 1175000 1175000>;
 			clock-latency-ns = <100000>;
+			required-opps = <&dmc_opp_902200000>;
 		};
 	};
 
@@ -433,6 +459,48 @@
 		opp-199875000 {
 			opp-hz = /bits/ 64 <199875000>;
 			opp-microvolt = <825000 825000 1300000>;
+		};
+	};
+
+	/* The memory clock: MEM_PLL / 2 */
+	dmc_opp_table: opp-table-5 {
+		compatible = "operating-points-v2";
+
+		dmc_opp_274625000: opp-274625000 {
+			opp-hz = /bits/ 64 <274625000>;
+			opp-microvolt = <800000 800000 1300000>;
+		};
+
+		dmc_opp_451100000: opp-451100000 {
+			opp-hz = /bits/ 64 <451100000>;
+			opp-microvolt = <812500 812500 1300000>;
+		};
+
+		dmc_opp_546000000: opp-546000000 {
+			opp-hz = /bits/ 64 <546000000>;
+			opp-microvolt = <862500 862500 1300000>;
+		};
+
+		dmc_opp_676000000: opp-676000000 {
+			opp-hz = /bits/ 64 <676000000>;
+			opp-microvolt = <875000 875000 1300000>;
+		};
+
+		dmc_opp_728000000: opp-728000000 {
+			opp-hz = /bits/ 64 <728000000>;
+			opp-microvolt = <875000 875000 1300000>;
+		};
+
+		dmc_opp_835250000: opp-835250000 {
+			opp-hz = /bits/ 64 <835250000>;
+			opp-microvolt = <906250 906250 1300000>;
+		};
+
+		/* The bootloader trains the memory at this level */
+		dmc_opp_902200000: opp-902200000 {
+			opp-hz = /bits/ 64 <902200000>;
+			opp-microvolt = <950000 950000 1300000>;
+			opp-suspend;
 		};
 	};
 
@@ -526,6 +594,31 @@
 				 <&cmu_mif CLK_GOUT_MIF_CMU_PERI_UART2>;
 			clock-names = "oscclk", "bus", "spi0", "spi1", "spi2",
 				      "spi3", "spi4", "uart0", "uart1", "uart2";
+		};
+
+		dmc: memory-controller@10400000 {
+			compatible = "samsung,exynos7870-dmc";
+			reg = <0x10400000 0x1000>, <0x10410000 0x100>,
+			      <0x10440000 0x1000>, <0x10461000 0x10>;
+			reg-names = "drex", "pf", "phy", "pause";
+			clocks = <&cmu_mif CLK_FOUT_MIF_MEM_PLL>,
+				 <&cmu_mif CLK_FFAC_MIF_MUX_MEM_PLL_DIV2>,
+				 <&cmu_mif CLK_GOUT_MIF_MUX_BUS_PLL>,
+				 <&cmu_mif CLK_FFAC_MIF_MUX_BUS_PLL_DIV2>,
+				 <&cmu_mif CLK_FFAC_MIF_MUX_MEDIA_PLL_DIV2>,
+				 <&cmu_mif CLK_MOUT_MIF_PHY_CLK2X>,
+				 <&cmu_mif CLK_GOUT_MIF_MUX_MEM_PLL>,
+				 <&cmu_mif CLK_GOUT_MIF_MUX_PHY_SWITCH>,
+				 <&cmu_mif CLK_MOUT_MIF_BUSD>,
+				 <&cmu_mif CLK_DOUT_MIF_BUSD>,
+				 <&cmu_mif CLK_MOUT_MIF_CCI>,
+				 <&cmu_mif CLK_DOUT_MIF_CCI>;
+			clock-names = "mem_pll", "mem_pll_div2", "bus_pll",
+				      "bus_pll_div2", "media_pll_div2",
+				      "phy_clk2x", "phy_mem", "phy_switch",
+				      "busd_mux", "busd", "cci_mux", "cci";
+			operating-points-v2 = <&dmc_opp_table>;
+			status = "disabled";
 		};
 
 		cmu_mif: clock-controller@10460000 {
