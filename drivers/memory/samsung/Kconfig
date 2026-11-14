@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 config SAMSUNG_MC
 	bool "Samsung Exynos Memory Controller support" if COMPILE_TEST
+	default ARCH_EXYNOS
 	help
 	  Support for the Memory Controller (MC) devices found on
 	  Samsung Exynos SoCs.
@@ -20,6 +21,16 @@ config EXYNOS5422_DMC
 	  of DRAM running with different frequency. The timings are calculated
 	  based on DT memory information.
 	  If unsure, say Y on devices with Samsung Exynos SoCs.
+
+config EXYNOS7870_DMC
+	tristate "Exynos7870 DRAM controller frequency scaling"
+	depends on ARCH_EXYNOS || (COMPILE_TEST && HAS_IOMEM)
+	depends on PM_DEVFREQ && CPU_FREQ
+	select DEVFREQ_GOV_PASSIVE
+	help
+	  Scale the frequency and voltage of the DRAM controller (MIF) of the
+	  Samsung Exynos7870 SoC with the CPU frequency, as the vendor
+	  bootloader's tables describe.
 
 config EXYNOS_SROM
 	bool "Exynos SROM controller driver" if COMPILE_TEST
