@@ -1324,6 +1324,15 @@ static const struct samsung_gate_clock dispaud_gate_clks[] __initconst = {
 	     CLK_IS_CRITICAL | CLK_SET_RATE_PARENT, 0),
 };
 
+/*
+ * The PHY clocks stop in system sleep: switch the PHY user muxes to OSCCLK,
+ * as the PMU power-down sequence needs a running clock (gate kept enabled).
+ */
+static const struct samsung_clk_reg_dump dispaud_suspend_regs[] = {
+	{ CLK_CON_GAT_DISPAUD_MUX_MIPIPHY_TXBYTECLKHS_USER_CON, 0x08200000 },
+	{ CLK_CON_GAT_DISPAUD_MUX_MIPIPHY_RXCLKESC0_USER_CON, 0x08200000 },
+};
+
 static const struct samsung_cmu_info dispaud_cmu_info __initconst = {
 	.fixed_clks	= dispaud_fixed_clks,
 	.nr_fixed_clks	= ARRAY_SIZE(dispaud_fixed_clks),
@@ -1337,6 +1346,8 @@ static const struct samsung_cmu_info dispaud_cmu_info __initconst = {
 	.nr_gate_clks		= ARRAY_SIZE(dispaud_gate_clks),
 	.clk_regs		= dispaud_clk_regs,
 	.nr_clk_regs		= ARRAY_SIZE(dispaud_clk_regs),
+	.suspend_regs		= dispaud_suspend_regs,
+	.nr_suspend_regs	= ARRAY_SIZE(dispaud_suspend_regs),
 	.nr_clk_ids		= DISPAUD_NR_CLK,
 };
 
@@ -1449,6 +1460,14 @@ static const struct samsung_gate_clock fsys_gate_clks[] __initconst = {
 	     CLK_IS_CRITICAL | CLK_SET_RATE_PARENT, 0),
 };
 
+/*
+ * The PHY clocks stop in system sleep: switch the PHY user muxes to OSCCLK,
+ * as the PMU power-down sequence needs a running clock (gate kept enabled).
+ */
+static const struct samsung_clk_reg_dump fsys_suspend_regs[] = {
+	{ CLK_CON_GAT_FSYS_MUX_USB20DRD_PHYCLOCK_USER_CON, 0x08200000 },
+};
+
 static const struct samsung_cmu_info fsys_cmu_info __initconst = {
 	.fixed_clks	= fsys_fixed_clks,
 	.nr_fixed_clks	= ARRAY_SIZE(fsys_fixed_clks),
@@ -1458,6 +1477,8 @@ static const struct samsung_cmu_info fsys_cmu_info __initconst = {
 	.nr_gate_clks		= ARRAY_SIZE(fsys_gate_clks),
 	.clk_regs		= fsys_clk_regs,
 	.nr_clk_regs		= ARRAY_SIZE(fsys_clk_regs),
+	.suspend_regs		= fsys_suspend_regs,
+	.nr_suspend_regs	= ARRAY_SIZE(fsys_suspend_regs),
 	.nr_clk_ids		= FSYS_NR_CLK,
 };
 
@@ -1760,6 +1781,15 @@ static const struct samsung_gate_clock isp_gate_clks[] __initconst = {
 	     CLK_SET_RATE_PARENT, 0),
 };
 
+/*
+ * The PHY clocks stop in system sleep: switch the PHY user muxes to OSCCLK,
+ * as the PMU power-down sequence needs a running clock (gate kept enabled).
+ */
+static const struct samsung_clk_reg_dump isp_suspend_regs[] = {
+	{ CLK_CON_GAT_ISP_MUX_RXBYTECLKHS0_SENSOR0_USER_CON, 0x0c200000 },
+	{ CLK_CON_GAT_ISP_MUX_RXBYTECLKHS0_SENSOR1_USER_CON, 0x0c200000 },
+};
+
 static const struct samsung_cmu_info isp_cmu_info __initconst = {
 	.fixed_clks	= isp_fixed_clks,
 	.nr_fixed_clks	= ARRAY_SIZE(isp_fixed_clks),
@@ -1773,6 +1803,8 @@ static const struct samsung_cmu_info isp_cmu_info __initconst = {
 	.nr_gate_clks		= ARRAY_SIZE(isp_gate_clks),
 	.clk_regs		= isp_clk_regs,
 	.nr_clk_regs		= ARRAY_SIZE(isp_clk_regs),
+	.suspend_regs		= isp_suspend_regs,
+	.nr_suspend_regs	= ARRAY_SIZE(isp_suspend_regs),
 	.nr_clk_ids		= ISP_NR_CLK,
 };
 
