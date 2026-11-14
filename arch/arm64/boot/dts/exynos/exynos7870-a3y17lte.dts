@@ -452,6 +452,11 @@
 	status = "okay";
 };
 
+&dmc {
+	vdd-supply = <&vdd_buck2>;
+	status = "okay";
+};
+
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
