@@ -254,7 +254,11 @@ int s3fwrn5_probe(struct nci_dev **ndev, void *phy_id, struct device *pdev,
 	nci_set_parent_dev(info->ndev, pdev);
 	nci_set_drvdata(info->ndev, info);
 
-	ret = nci_register_device(info->ndev);
+	/* The device is only the handle of the bus driver then */
+	if (IS_ENABLED(CONFIG_NFC_S3FWRN5_RAW))
+		ret = s3fwrn5_raw_register(info);
+	else
+		ret = nci_register_device(info->ndev);
 	if (ret < 0) {
 		nci_free_device(info->ndev);
 		return ret;
@@ -274,7 +278,10 @@ void s3fwrn5_remove(struct nci_dev *ndev)
 
 	s3fwrn5_set_mode(info, S3FWRN5_MODE_COLD);
 
-	nci_unregister_device(ndev);
+	if (IS_ENABLED(CONFIG_NFC_S3FWRN5_RAW))
+		s3fwrn5_raw_unregister(info);
+	else
+		nci_unregister_device(ndev);
 	nci_free_device(ndev);
 }
 EXPORT_SYMBOL(s3fwrn5_remove);
@@ -284,6 +291,9 @@ int s3fwrn5_recv_frame(struct nci_dev *ndev, struct sk_buff *skb,
 {
 	switch (mode) {
 	case S3FWRN5_MODE_NCI:
+		if (IS_ENABLED(CONFIG_NFC_S3FWRN5_RAW))
+			return s3fwrn5_raw_recv_frame(nci_get_drvdata(ndev),
+						      skb);
 		return nci_recv_frame(ndev, skb);
 	case S3FWRN5_MODE_FW:
 		return s3fwrn5_fw_recv_frame(ndev, skb);

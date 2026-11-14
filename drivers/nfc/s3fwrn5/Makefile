@@ -4,6 +4,7 @@
 #
 
 s3fwrn5-objs = core.o firmware.o nci.o phy_common.o
+s3fwrn5-$(CONFIG_NFC_S3FWRN5_RAW) += raw.o
 s3fwrn5_i2c-objs = i2c.o
 s3fwrn82_uart-objs = uart.o
 
