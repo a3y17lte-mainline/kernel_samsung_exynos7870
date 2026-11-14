@@ -514,8 +514,8 @@ out:
 		online = 0;
 
 	if (online) {
-		alarm_start_timer(&priv->wdt_alarm,
-				  ktime_set(S2MU004_CHGR_WDT_INTERVAL_S, 0), true);
+		alarm_start_relative(&priv->wdt_alarm,
+				     ktime_set(S2MU004_CHGR_WDT_INTERVAL_S, 0));
 	} else {
 		alarm_try_to_cancel(&priv->wdt_alarm);
 		queue_delayed_work(system_freezable_wq, &priv->wdt_work,
