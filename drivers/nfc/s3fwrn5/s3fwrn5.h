@@ -33,6 +33,8 @@ struct s3fwrn5_phy_ops {
 	int (*write)(void *id, struct sk_buff *skb);
 };
 
+struct s3fwrn5_raw;
+
 struct s3fwrn5_info {
 	struct nci_dev *ndev;
 	void *phy_id;
@@ -46,6 +48,8 @@ struct s3fwrn5_info {
 	struct s3fwrn5_fw_info fw_info;
 
 	struct mutex mutex;
+
+	struct s3fwrn5_raw *raw;
 };
 
 static inline int s3fwrn5_set_mode(struct s3fwrn5_info *info,
@@ -91,5 +95,10 @@ void s3fwrn5_remove(struct nci_dev *ndev);
 
 int s3fwrn5_recv_frame(struct nci_dev *ndev, struct sk_buff *skb,
 	enum s3fwrn5_mode mode);
+
+/* CONFIG_NFC_S3FWRN5_RAW: a character device instead of the NCI core */
+int s3fwrn5_raw_register(struct s3fwrn5_info *info);
+void s3fwrn5_raw_unregister(struct s3fwrn5_info *info);
+int s3fwrn5_raw_recv_frame(struct s3fwrn5_info *info, struct sk_buff *skb);
 
 #endif /* __LOCAL_S3FWRN5_H_ */
