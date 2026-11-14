@@ -10,6 +10,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/clock/samsung,exynos7870-cmu.h>
 
@@ -2257,10 +2258,32 @@ static void __init exynos7870_cmu_peri_init(struct device_node *np)
 CLK_OF_DECLARE(exynos7870_cmu_peri, "samsung,exynos7870-cmu-peri",
 	       exynos7870_cmu_peri_init);
 
+/* Only the CMUs in a power domain have PM data; the others use syscore */
+static int exynos7870_cmu_runtime_suspend(struct device *dev)
+{
+	return dev_get_drvdata(dev) ? exynos_arm64_cmu_suspend(dev) : 0;
+}
+
+static int exynos7870_cmu_runtime_resume(struct device *dev)
+{
+	return dev_get_drvdata(dev) ? exynos_arm64_cmu_resume(dev) : 0;
+}
+
+static const struct dev_pm_ops exynos7870_cmu_pm_ops = {
+	RUNTIME_PM_OPS(exynos7870_cmu_runtime_suspend,
+		       exynos7870_cmu_runtime_resume, NULL)
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				  pm_runtime_force_resume)
+};
+
 static int __init exynos7870_cmu_probe(struct platform_device *pdev)
 {
 	const struct samsung_cmu_info *info;
 	struct device *dev = &pdev->dev;
+
+	/* A CMU in a power domain must only be accessed while it is on */
+	if (of_property_present(dev->of_node, "power-domains"))
+		return exynos_arm64_register_cmu_pm(pdev, true);
 
 	info = of_device_get_match_data(dev);
 	exynos_arm64_register_cmu(dev, dev->of_node, info);
@@ -2299,6 +2322,7 @@ static struct platform_driver exynos7870_cmu_driver __refdata = {
 		.name = "exynos7870-cmu",
 		.of_match_table = exynos7870_cmu_of_match,
 		.suppress_bind_attrs = true,
+		.pm = &exynos7870_cmu_pm_ops,
 	},
 	.probe = exynos7870_cmu_probe,
 };
