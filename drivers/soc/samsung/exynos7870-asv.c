@@ -9,8 +9,9 @@
  * the vendor firmware holds in RAM; the CPU ones are the same for both
  * clusters.
  *
- * The GPU's and the buses' OPP tables only exist once their drivers have
- * probed, so their voltages are adjusted when the device gets bound.
+ * The GPU's, the memory's and the buses' OPP tables only exist once their
+ * drivers have probed, so their voltages are adjusted when the device gets
+ * bound.
  */
 
 #include <linux/arm-smccc.h>
@@ -53,6 +54,7 @@
 #define E7870_ASV_NUM_TABLES		7
 #define E7870_ASV_CPU_NUM_LEVELS	13
 #define E7870_ASV_GPU_NUM_LEVELS	7
+#define E7870_ASV_MIF_NUM_LEVELS	7
 #define E7870_ASV_INT_NUM_LEVELS	3
 #define E7870_ASV_DISP_NUM_LEVELS	2
 #define E7870_ASV_NUM_GROUPS		16
@@ -262,6 +264,78 @@ static const u8 exynos7870_asv_gpu_volt[E7870_ASV_NUM_TABLES][E7870_ASV_GPU_NUM_
 	},
 };
 
+/* MIF levels, in kHz of the memory clock (MEM_PLL / 2) */
+static const unsigned int exynos7870_asv_mif_freq[E7870_ASV_MIF_NUM_LEVELS] = {
+	902200, 835250, 728000, 676000, 546000, 451100, 274625,
+};
+
+static const u8 exynos7870_asv_mif_volt[E7870_ASV_NUM_TABLES][E7870_ASV_MIF_NUM_LEVELS]
+				      [E7870_ASV_NUM_GROUPS] = {
+	[0] = {
+		{ 56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26 },
+		{ 49, 47, 45, 43, 41, 39, 37, 35, 33, 31, 29, 27, 25, 23, 21, 19 },
+		{ 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14 },
+		{ 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14 },
+		{ 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12 },
+		{ 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4 },
+		{ 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2 },
+	},
+	[1] = {
+		{ 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6 },
+		{ 31, 29, 27, 25, 23, 21, 19, 17, 15, 13, 11,  9,  7,  5,  3,  1 },
+		{ 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0,  0 },
+		{ 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0,  0 },
+		{ 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0,  0,  0 },
+		{ 16, 14, 12, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 14, 12, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[2] = {
+		{ 24, 24, 22, 20, 18, 18, 16, 14, 14, 12, 10, 10,  8,  6,  6,  4 },
+		{ 24, 24, 22, 20, 18, 16, 14, 14, 12, 10,  8,  6,  4,  4,  2,  0 },
+		{ 16, 16, 14, 12, 10, 10,  8,  6,  6,  4,  2,  2,  0,  0,  0,  0 },
+		{ 14, 14, 12, 10,  8,  8,  6,  4,  4,  2,  0,  0,  0,  0,  0,  0 },
+		{ 10,  8,  6,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 10,  8,  6,  4,  2,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{  6,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[3] = {
+		{ 34, 32, 30, 27, 25, 23, 20, 18, 16, 14, 11,  9,  7,  5,  3,  1 },
+		{ 32, 30, 29, 25, 24, 21, 19, 17, 14, 12, 10,  8,  5,  3,  1,  0 },
+		{ 25, 23, 21, 18, 16, 14, 12, 10,  8,  5,  3,  1,  0,  0,  0,  0 },
+		{ 21, 19, 18, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0,  0 },
+		{ 16, 14, 13, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[4] = {
+		{ 34, 32, 30, 27, 25, 23, 20, 18, 16, 14, 11,  9,  7,  5,  3,  1 },
+		{ 32, 30, 29, 25, 24, 21, 19, 17, 14, 12, 10,  8,  5,  3,  1,  0 },
+		{ 25, 23, 21, 18, 16, 14, 12, 10,  8,  5,  3,  1,  0,  0,  0,  0 },
+		{ 21, 19, 18, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0,  0 },
+		{ 16, 14, 13, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[5] = {
+		{ 33, 31, 30, 27, 25, 23, 21, 18, 16, 14, 12, 10,  8,  6,  4,  2 },
+		{ 32, 30, 29, 25, 24, 21, 19, 17, 14, 12, 10,  8,  5,  3,  1,  0 },
+		{ 24, 22, 21, 18, 16, 14, 12, 10,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 22, 20, 19, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0,  0 },
+		{ 17, 15, 14, 10,  9,  7,  5,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11,  9,  8,  5,  4,  2,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[6] = {
+		{ 33, 31, 30, 27, 25, 23, 21, 18, 16, 14, 12, 10,  8,  6,  4,  2 },
+		{ 32, 30, 29, 25, 24, 21, 19, 17, 14, 12, 10,  8,  5,  3,  1,  0 },
+		{ 24, 22, 21, 18, 16, 14, 12, 10,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 22, 20, 19, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0,  0 },
+		{ 17, 15, 14, 10,  9,  7,  5,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11, 10,  9,  6,  4,  3,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 11,  9,  8,  5,  4,  2,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+};
+
 /*
  * INT bus levels, in kHz of CLKCMU_FSYS_BUS. FSYS_BUS runs at 199.875 MHz in
  * both the vendor's 400 and 334 MHz INT levels, so the 334 MHz voltages
@@ -368,7 +442,14 @@ static const struct exynos7870_asv_domain exynos7870_asv_gpu = {
 	.ssa1_split = E7870_ASV_GPU_SSA1_SPLIT,
 };
 
-/* All INT and DISP levels use the SSA10 offset */
+/* All MIF, INT and DISP levels use the SSA10 offset */
+static const struct exynos7870_asv_domain exynos7870_asv_mif = {
+	.freq = exynos7870_asv_mif_freq,
+	.volt = &exynos7870_asv_mif_volt[0][0][0],
+	.num_levels = E7870_ASV_MIF_NUM_LEVELS,
+	.ssa1_split = E7870_ASV_MIF_NUM_LEVELS,
+};
+
 static const struct exynos7870_asv_domain exynos7870_asv_int = {
 	.freq = exynos7870_asv_int_freq,
 	.volt = &exynos7870_asv_int_volt[0][0][0],
@@ -396,6 +477,8 @@ struct exynos7870_asv_dev_desc {
 static const struct exynos7870_asv_dev_desc exynos7870_asv_devs[] = {
 	{ "GPU", "samsung,exynos7870-mali", NULL, &exynos7870_asv_gpu,
 	  EXYNOS7870_ASV_INFO_G3D, 0 },
+	{ "MIF", "samsung,exynos7870-dmc", NULL, &exynos7870_asv_mif,
+	  EXYNOS7870_ASV_INFO_G3D, 16 },
 	{ "INT", "samsung,exynos-bus", "bus-int", &exynos7870_asv_int,
 	  EXYNOS7870_ASV_INFO_INT, 0 },
 	{ "DISP", "samsung,exynos-bus", "bus-disp", &exynos7870_asv_disp,
