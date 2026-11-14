@@ -6,7 +6,6 @@
  * Robert Baldyga <r.baldyga@samsung.com>
  */
 
-#include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/gpio.h>
 #include <linux/delay.h>
@@ -23,7 +22,6 @@
 struct s3fwrn5_i2c_phy {
 	struct phy_common common;
 	struct i2c_client *i2c_dev;
-	struct clk *clk;
 
 	unsigned int irq_skip:1;
 };
@@ -207,17 +205,6 @@ static int s3fwrn5_i2c_probe(struct i2c_client *client)
 				    GPIOF_OUT_INIT_LOW, "s3fwrn5_fw_wake");
 	if (ret < 0)
 		return ret;
-
-	/*
-	 * S3FWRN5 depends on a clock input ("XI" pin) to function properly.
-	 * Depending on the hardware configuration this could be an always-on
-	 * oscillator or some external clock that must be explicitly enabled.
-	 * Make sure the clock is running before starting S3FWRN5.
-	 */
-	phy->clk = devm_clk_get_optional_enabled(&client->dev, NULL);
-	if (IS_ERR(phy->clk))
-		return dev_err_probe(&client->dev, PTR_ERR(phy->clk),
-				     "failed to get clock\n");
 
 	ret = s3fwrn5_probe(&phy->common.ndev, phy, &phy->i2c_dev->dev,
 			    &i2c_phy_ops);
