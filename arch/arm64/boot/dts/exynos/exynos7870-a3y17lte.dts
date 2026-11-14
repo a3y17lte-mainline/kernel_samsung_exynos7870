@@ -542,11 +542,7 @@
 
 			vdd_buck2: buck2 {
 				regulator-name = "vdd_buck2";
-				/*
-				 * Also supplies MIF and CAM, which have no
-				 * consumer: keep the bootloader's level.
-				 */
-				regulator-min-microvolt = <750000>;
+				regulator-min-microvolt = <600000>;
 				regulator-max-microvolt = <1300000>;
 				regulator-ramp-delay = <12000>;
 				regulator-boot-on;
