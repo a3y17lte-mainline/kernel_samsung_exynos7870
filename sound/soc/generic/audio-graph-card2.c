@@ -1340,6 +1340,10 @@ int audio_graph2_parse_of(struct simple_util_priv *priv, struct device *dev,
 	if (ret < 0)
 		goto err;
 
+	ret = simple_util_parse_pin_switches(card, NULL);
+	if (ret < 0)
+		goto err;
+
 	ret = simple_util_parse_routing(card, NULL);
 	if (ret < 0)
 		goto err;
