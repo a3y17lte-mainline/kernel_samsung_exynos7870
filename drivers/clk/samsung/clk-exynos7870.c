@@ -31,8 +31,14 @@
 #define CLK_CON_GAT_MIF_MUX_MEDIA_PLL_CON		0x0204
 #define CLK_CON_GAT_MIF_MUX_BUS_PLL			0x0208
 #define CLK_CON_GAT_MIF_MUX_BUS_PLL_CON			0x0208
+#define CLK_CON_GAT_MIF_MUX_PHY_CLK2X			0x0210
+#define CLK_CON_MUX_MIF_PHY_CLK2X			0x0210
+#define CLK_CON_GAT_MIF_MUX_PHY_SWITCH			0x0214
+#define CLK_CON_MUX_MIF_PHY_SWITCH			0x0214
 #define CLK_CON_GAT_MIF_MUX_BUSD			0x0220
 #define CLK_CON_MUX_MIF_BUSD				0x0220
+#define CLK_CON_GAT_MIF_MUX_CCI				0x0228
+#define CLK_CON_MUX_MIF_CCI				0x0228
 #define CLK_CON_GAT_MIF_MUX_CMU_ISP_VRA			0x0264
 #define CLK_CON_MUX_MIF_CMU_ISP_VRA			0x0264
 #define CLK_CON_GAT_MIF_MUX_CMU_ISP_CAM			0x0268
@@ -83,8 +89,11 @@
 #define CLK_CON_MUX_MIF_CMU_ISP_SENSOR1			0x02c8
 #define CLK_CON_GAT_MIF_MUX_CMU_ISP_SENSOR2		0x02cc
 #define CLK_CON_MUX_MIF_CMU_ISP_SENSOR2			0x02cc
+#define CLK_CON_DIV_MIF_PHY_CLKM			0x0414
 #define CLK_CON_DIV_MIF_BUSD				0x0420
 #define CLK_CON_DIV_MIF_APB				0x0424
+#define CLK_CON_DIV_MIF_CCI				0x0428
+#define CLK_CON_DIV_MIF_BUSP				0x042c
 #define CLK_CON_DIV_MIF_HSI2C				0x0430
 #define CLK_CON_DIV_MIF_CMU_CPUCL0_SWITCH		0x0458
 #define CLK_CON_DIV_MIF_CMU_CPUCL1_SWITCH		0x045c
@@ -168,8 +177,14 @@ static const unsigned long mif_clk_regs[] __initconst = {
 	CLK_CON_GAT_MIF_MUX_MEDIA_PLL_CON,
 	CLK_CON_GAT_MIF_MUX_BUS_PLL,
 	CLK_CON_GAT_MIF_MUX_BUS_PLL_CON,
+	CLK_CON_GAT_MIF_MUX_PHY_CLK2X,
+	CLK_CON_MUX_MIF_PHY_CLK2X,
+	CLK_CON_GAT_MIF_MUX_PHY_SWITCH,
+	CLK_CON_MUX_MIF_PHY_SWITCH,
 	CLK_CON_GAT_MIF_MUX_BUSD,
 	CLK_CON_MUX_MIF_BUSD,
+	CLK_CON_GAT_MIF_MUX_CCI,
+	CLK_CON_MUX_MIF_CCI,
 	CLK_CON_GAT_MIF_MUX_CMU_ISP_VRA,
 	CLK_CON_MUX_MIF_CMU_ISP_VRA,
 	CLK_CON_GAT_MIF_MUX_CMU_ISP_CAM,
@@ -220,8 +235,11 @@ static const unsigned long mif_clk_regs[] __initconst = {
 	CLK_CON_MUX_MIF_CMU_ISP_SENSOR1,
 	CLK_CON_GAT_MIF_MUX_CMU_ISP_SENSOR2,
 	CLK_CON_MUX_MIF_CMU_ISP_SENSOR2,
+	CLK_CON_DIV_MIF_PHY_CLKM,
 	CLK_CON_DIV_MIF_BUSD,
 	CLK_CON_DIV_MIF_APB,
+	CLK_CON_DIV_MIF_CCI,
+	CLK_CON_DIV_MIF_BUSP,
 	CLK_CON_DIV_MIF_HSI2C,
 	CLK_CON_DIV_MIF_CMU_CPUCL0_SWITCH,
 	CLK_CON_DIV_MIF_CMU_CPUCL1_SWITCH,
@@ -294,12 +312,24 @@ static const unsigned long mif_clk_regs[] __initconst = {
 };
 
 static const struct samsung_fixed_factor_clock mif_fixed_factor_clks[] __initconst = {
-	FFACTOR(0, "ffac_mif_mux_bus_pll_div2", "gout_mif_mux_bus_pll_con", 1, 2,
-		0),
-	FFACTOR(0, "ffac_mif_mux_media_pll_div2", "gout_mif_mux_media_pll_con",
-		1, 2, 0),
-	FFACTOR(0, "ffac_mif_mux_mem_pll_div2", "gout_mif_mux_mem_pll_con", 1, 2,
-		0),
+	FFACTOR(CLK_FFAC_MIF_MUX_BUS_PLL_DIV2, "ffac_mif_mux_bus_pll_div2",
+		"gout_mif_mux_bus_pll_con", 1, 2, 0),
+	FFACTOR(CLK_FFAC_MIF_MUX_MEDIA_PLL_DIV2, "ffac_mif_mux_media_pll_div2",
+		"gout_mif_mux_media_pll_con", 1, 2, 0),
+	FFACTOR(CLK_FFAC_MIF_MUX_MEM_PLL_DIV2, "ffac_mif_mux_mem_pll_div2",
+		"gout_mif_mux_mem_pll_con", 1, 2, 0),
+};
+
+/* MEM_PLL runs at twice the memory clock: one rate per MIF level */
+static const struct samsung_pll_rate_table mif_mem_pll_rates[] __initconst = {
+	PLL_35XX_RATE(26 * MHZ, 1804400000U, 347, 5, 0),
+	PLL_35XX_RATE(26 * MHZ, 1670500000U, 257, 4, 0),
+	PLL_35XX_RATE(26 * MHZ, 1456000000U, 224, 4, 0),
+	PLL_35XX_RATE(26 * MHZ, 1352000000U, 156, 3, 0),
+	PLL_35XX_RATE(26 * MHZ, 1092000000U, 168, 4, 0),
+	PLL_35XX_RATE(26 * MHZ, 902200000U, 347, 5, 1),
+	PLL_35XX_RATE(26 * MHZ, 549250000U, 169, 4, 1),
+	{ /* sentinel */ }
 };
 
 static const struct samsung_pll_clock mif_pll_clks[] __initconst = {
@@ -308,7 +338,7 @@ static const struct samsung_pll_clock mif_pll_clks[] __initconst = {
 	PLL(pll_1417x, CLK_FOUT_MIF_MEDIA_PLL, "fout_mif_media_pll", "oscclk",
 	    PLL_LOCKTIME_MIF_MEDIA_PLL, PLL_CON0_MIF_MEDIA_PLL, NULL),
 	PLL(pll_1417x, CLK_FOUT_MIF_MEM_PLL, "fout_mif_mem_pll", "oscclk",
-	    PLL_LOCKTIME_MIF_MEM_PLL, PLL_CON0_MIF_MEM_PLL, NULL),
+	    PLL_LOCKTIME_MIF_MEM_PLL, PLL_CON0_MIF_MEM_PLL, mif_mem_pll_rates),
 };
 
 /* List of parent clocks for muxes in CMU_MIF */
@@ -368,6 +398,13 @@ PNAME(mout_mif_cmu_peri_uart0_p)		= { "ffac_mif_mux_bus_pll_div2",
 PNAME(mout_mif_busd_p)				= { "ffac_mif_mux_bus_pll_div2",
 						    "ffac_mif_mux_media_pll_div2",
 						    "ffac_mif_mux_mem_pll_div2" };
+PNAME(mout_mif_phy_switch_p)			= { "gout_mif_mux_media_pll",
+						    "ffac_mif_mux_media_pll_div2" };
+PNAME(mout_mif_phy_clk2x_p)			= { "gout_mif_mux_mem_pll",
+						    "gout_mif_mux_phy_switch" };
+PNAME(mout_mif_cci_p)				= { "ffac_mif_mux_bus_pll_div2",
+						    "ffac_mif_mux_media_pll_div2",
+						    "gout_mif_mux_bus_pll" };
 
 static const struct samsung_mux_clock mif_mux_clks[] __initconst = {
 	MUX(CLK_MOUT_MIF_CMU_DISPAUD_BUS, "mout_mif_cmu_dispaud_bus",
@@ -429,6 +466,12 @@ static const struct samsung_mux_clock mif_mux_clks[] __initconst = {
 	    mout_mif_cmu_peri_uart0_p, CLK_CON_MUX_MIF_CMU_PERI_UART0, 12, 1),
 	MUX(CLK_MOUT_MIF_BUSD, "mout_mif_busd", mout_mif_busd_p,
 	    CLK_CON_MUX_MIF_BUSD, 12, 2),
+	MUX(CLK_MOUT_MIF_PHY_SWITCH, "mout_mif_phy_switch",
+	    mout_mif_phy_switch_p, CLK_CON_MUX_MIF_PHY_SWITCH, 12, 1),
+	MUX(CLK_MOUT_MIF_PHY_CLK2X, "mout_mif_phy_clk2x", mout_mif_phy_clk2x_p,
+	    CLK_CON_MUX_MIF_PHY_CLK2X, 12, 1),
+	MUX(CLK_MOUT_MIF_CCI, "mout_mif_cci", mout_mif_cci_p,
+	    CLK_CON_MUX_MIF_CCI, 12, 2),
 };
 
 static const struct samsung_div_clock mif_div_clks[] __initconst = {
@@ -504,6 +547,12 @@ static const struct samsung_div_clock mif_div_clks[] __initconst = {
 	    CLK_CON_DIV_MIF_APB, 0, 2),
 	DIV(CLK_DOUT_MIF_BUSD, "dout_mif_busd", "gout_mif_mux_busd",
 	    CLK_CON_DIV_MIF_BUSD, 0, 4),
+	DIV(CLK_DOUT_MIF_PHY_CLKM, "dout_mif_phy_clkm", "gout_mif_mux_phy_clk2x",
+	    CLK_CON_DIV_MIF_PHY_CLKM, 0, 2),
+	DIV(CLK_DOUT_MIF_CCI, "dout_mif_cci", "gout_mif_mux_cci",
+	    CLK_CON_DIV_MIF_CCI, 0, 4),
+	DIV(CLK_DOUT_MIF_BUSP, "dout_mif_busp", "dout_mif_cci",
+	    CLK_CON_DIV_MIF_BUSP, 0, 2),
 	DIV(CLK_DOUT_MIF_HSI2C, "dout_mif_hsi2c", "ffac_mif_mux_media_pll_div2",
 	    CLK_CON_DIV_MIF_HSI2C, 0, 4),
 };
@@ -723,6 +772,14 @@ static const struct samsung_gate_clock mif_gate_clks[] __initconst = {
 	GATE(CLK_GOUT_MIF_MUX_BUSD, "gout_mif_mux_busd", "mout_mif_busd",
 	     CLK_CON_GAT_MIF_MUX_BUSD, 21, CLK_IS_CRITICAL |
 	     CLK_SET_RATE_PARENT, 0),
+	GATE(CLK_GOUT_MIF_MUX_PHY_SWITCH, "gout_mif_mux_phy_switch",
+	     "mout_mif_phy_switch", CLK_CON_GAT_MIF_MUX_PHY_SWITCH, 21,
+	     CLK_IS_CRITICAL, 0),
+	GATE(CLK_GOUT_MIF_MUX_PHY_CLK2X, "gout_mif_mux_phy_clk2x",
+	     "mout_mif_phy_clk2x", CLK_CON_GAT_MIF_MUX_PHY_CLK2X, 21,
+	     CLK_IS_CRITICAL, 0),
+	GATE(CLK_GOUT_MIF_MUX_CCI, "gout_mif_mux_cci", "mout_mif_cci",
+	     CLK_CON_GAT_MIF_MUX_CCI, 21, CLK_IS_CRITICAL, 0),
 	GATE(CLK_GOUT_MIF_MUX_MEDIA_PLL, "gout_mif_mux_media_pll",
 	     "gout_mif_mux_media_pll_con", CLK_CON_GAT_MIF_MUX_MEDIA_PLL, 21,
 	     CLK_IS_CRITICAL | CLK_SET_RATE_PARENT, 0),
