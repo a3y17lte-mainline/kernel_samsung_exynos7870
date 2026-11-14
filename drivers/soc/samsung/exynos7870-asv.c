@@ -9,8 +9,8 @@
  * the vendor firmware holds in RAM; the CPU ones are the same for both
  * clusters.
  *
- * The GPU's OPP table only exists once its driver has probed, so the GPU
- * voltages are adjusted when the GPU device gets bound.
+ * The GPU's and the buses' OPP tables only exist once their drivers have
+ * probed, so their voltages are adjusted when the device gets bound.
  */
 
 #include <linux/arm-smccc.h>
@@ -37,7 +37,8 @@
 
 #define EXYNOS7870_ASV_INFO_BASE	0x100d9000
 #define EXYNOS7870_ASV_INFO_CPU		0	/* CPUCL0 [15:0], CPUCL1 [31:16] */
-#define EXYNOS7870_ASV_INFO_G3D		1	/* [15:0] */
+#define EXYNOS7870_ASV_INFO_G3D		1	/* G3D [15:0], MIF [31:16] */
+#define EXYNOS7870_ASV_INFO_INT		2	/* INT [15:0], DISP [31:16] */
 #define EXYNOS7870_ASV_INFO_VERSION	3
 
 /* Fields of each 16-bit domain entry */
@@ -52,6 +53,8 @@
 #define E7870_ASV_NUM_TABLES		7
 #define E7870_ASV_CPU_NUM_LEVELS	13
 #define E7870_ASV_GPU_NUM_LEVELS	7
+#define E7870_ASV_INT_NUM_LEVELS	3
+#define E7870_ASV_DISP_NUM_LEVELS	2
 #define E7870_ASV_NUM_GROUPS		16
 
 /* Table entries are 6.25 mV steps above 600 mV */
@@ -259,6 +262,91 @@ static const u8 exynos7870_asv_gpu_volt[E7870_ASV_NUM_TABLES][E7870_ASV_GPU_NUM_
 	},
 };
 
+/*
+ * INT bus levels, in kHz of CLKCMU_FSYS_BUS. FSYS_BUS runs at 199.875 MHz in
+ * both the vendor's 400 and 334 MHz INT levels, so the 334 MHz voltages
+ * apply to it; MFC and MSCL stay at their lowest rates.
+ */
+static const unsigned int exynos7870_asv_int_freq[E7870_ASV_INT_NUM_LEVELS] = {
+	199875, 159900, 133250,
+};
+
+static const u8 exynos7870_asv_int_volt[E7870_ASV_NUM_TABLES][E7870_ASV_INT_NUM_LEVELS]
+				      [E7870_ASV_NUM_GROUPS] = {
+	[0] = {
+		{ 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6 },
+		{ 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4 },
+		{ 29, 27, 25, 23, 21, 19, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0 },
+	},
+	[1] = {
+		{ 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2 },
+		{ 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0 },
+		{ 25, 23, 21, 19, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0 },
+	},
+	[2] = {
+		{ 18, 18, 16, 14, 14, 12, 10, 10,  8,  6,  6,  4,  2,  2,  0,  0 },
+		{  8,  8,  6,  4,  2,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{  8,  6,  6,  4,  2,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[3] = {
+		{ 29, 27, 26, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0 },
+		{ 17, 16, 15, 12, 10,  9,  7,  5,  4,  2,  0,  0,  0,  0,  0,  0 },
+		{ 15, 13, 12,  9,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[4] = {
+		{ 29, 27, 26, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0 },
+		{ 17, 16, 15, 12, 10,  9,  7,  5,  4,  2,  0,  0,  0,  0,  0,  0 },
+		{ 15, 13, 12,  9,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[5] = {
+		{ 29, 27, 26, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0 },
+		{ 17, 16, 15, 12, 10,  9,  7,  5,  4,  2,  0,  0,  0,  0,  0,  0 },
+		{ 15, 13, 12,  9,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[6] = {
+		{ 29, 27, 26, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0 },
+		{ 17, 16, 15, 12, 10,  9,  7,  5,  4,  2,  0,  0,  0,  0,  0,  0 },
+		{ 15, 13, 12,  9,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+};
+
+/* DISP bus levels, in kHz of CLKCMU_DISPAUD_BUS */
+static const unsigned int exynos7870_asv_disp_freq[E7870_ASV_DISP_NUM_LEVELS] = {
+	199875, 133250,
+};
+
+static const u8 exynos7870_asv_disp_volt[E7870_ASV_NUM_TABLES][E7870_ASV_DISP_NUM_LEVELS]
+				      [E7870_ASV_NUM_GROUPS] = {
+	[0] = {
+		{ 39, 37, 35, 33, 31, 29, 27, 25, 23, 21, 19, 17, 15, 13, 11,  9 },
+		{ 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2 },
+	},
+	[1] = {
+		{ 23, 21, 19, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 22, 20, 18, 16, 14, 12, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0 },
+	},
+	[2] = {
+		{ 12, 10,  8,  6,  4,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+		{ 12, 10,  8,  6,  4,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+	},
+	[3] = {
+		{ 23, 21, 20, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 20, 18, 17, 14, 12, 10,  8,  6,  5,  3,  1,  0,  0,  0,  0,  0 },
+	},
+	[4] = {
+		{ 23, 21, 20, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 20, 18, 17, 14, 12, 10,  8,  6,  5,  3,  1,  0,  0,  0,  0,  0 },
+	},
+	[5] = {
+		{ 23, 21, 20, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 20, 18, 17, 14, 12, 10,  8,  6,  5,  3,  1,  0,  0,  0,  0,  0 },
+	},
+	[6] = {
+		{ 23, 21, 20, 17, 15, 13, 11,  9,  7,  5,  3,  1,  0,  0,  0,  0 },
+		{ 20, 18, 17, 14, 12, 10,  8,  6,  5,  3,  1,  0,  0,  0,  0,  0 },
+	},
+};
+
 struct exynos7870_asv_domain {
 	const unsigned int *freq;
 	const u8 *volt;		/* [table][level][group] */
@@ -280,10 +368,44 @@ static const struct exynos7870_asv_domain exynos7870_asv_gpu = {
 	.ssa1_split = E7870_ASV_GPU_SSA1_SPLIT,
 };
 
-struct exynos7870_asv_gpu {
+/* All INT and DISP levels use the SSA10 offset */
+static const struct exynos7870_asv_domain exynos7870_asv_int = {
+	.freq = exynos7870_asv_int_freq,
+	.volt = &exynos7870_asv_int_volt[0][0][0],
+	.num_levels = E7870_ASV_INT_NUM_LEVELS,
+	.ssa1_split = E7870_ASV_INT_NUM_LEVELS,
+};
+
+static const struct exynos7870_asv_domain exynos7870_asv_disp = {
+	.freq = exynos7870_asv_disp_freq,
+	.volt = &exynos7870_asv_disp_volt[0][0][0],
+	.num_levels = E7870_ASV_DISP_NUM_LEVELS,
+	.ssa1_split = E7870_ASV_DISP_NUM_LEVELS,
+};
+
+/* Devices whose OPP table is created by their own driver */
+struct exynos7870_asv_dev_desc {
+	const char *name;
+	const char *compatible;
+	const char *node_name;		/* NULL: any */
+	const struct exynos7870_asv_domain *dom;
+	unsigned int word;		/* ASV info word */
+	unsigned int shift;		/* of the 16-bit entry in it */
+};
+
+static const struct exynos7870_asv_dev_desc exynos7870_asv_devs[] = {
+	{ "GPU", "samsung,exynos7870-mali", NULL, &exynos7870_asv_gpu,
+	  EXYNOS7870_ASV_INFO_G3D, 0 },
+	{ "INT", "samsung,exynos-bus", "bus-int", &exynos7870_asv_int,
+	  EXYNOS7870_ASV_INFO_INT, 0 },
+	{ "DISP", "samsung,exynos-bus", "bus-disp", &exynos7870_asv_disp,
+	  EXYNOS7870_ASV_INFO_INT, 16 },
+};
+
+struct exynos7870_asv_dev {
 	struct exynos_asv *asv;
-	struct exynos_asv_subsys subsys;
 	struct notifier_block nb;
+	struct exynos_asv_subsys subsys[ARRAY_SIZE(exynos7870_asv_devs)];
 };
 
 static int exynos7870_asv_read_info(unsigned int word, u32 *val)
@@ -358,82 +480,106 @@ static int exynos7870_asv_init_subsys(struct exynos_asv *asv,
 	return 0;
 }
 
-static bool exynos7870_asv_is_gpu(struct device *dev)
-{
-	return of_device_is_compatible(dev->of_node, "samsung,exynos7870-mali");
-}
-
-static void exynos7870_asv_update_gpu(struct exynos7870_asv_gpu *gpu,
+static void exynos7870_asv_update_dev(struct exynos7870_asv_dev *adev,
 				      struct device *dev)
 {
-	/* Only with the GPU driver's OPP table in place */
-	if (dev_pm_opp_get_opp_count(dev) <= 0)
+	struct device_node *np = dev->of_node;
+	int i;
+
+	if (!np)
 		return;
 
-	exynos_asv_update_dev_opps(gpu->asv, &gpu->subsys, dev);
+	for (i = 0; i < ARRAY_SIZE(exynos7870_asv_devs); i++) {
+		const struct exynos7870_asv_dev_desc *desc =
+			&exynos7870_asv_devs[i];
+
+		if (!adev->subsys[i].table.buf ||
+		    !of_device_is_compatible(np, desc->compatible) ||
+		    (desc->node_name && !of_node_name_eq(np, desc->node_name)))
+			continue;
+
+		/* Only with the driver's OPP table in place */
+		if (dev_pm_opp_get_opp_count(dev) > 0)
+			exynos_asv_update_dev_opps(adev->asv, &adev->subsys[i],
+						   dev);
+		return;
+	}
 }
 
-static int exynos7870_asv_gpu_notify(struct notifier_block *nb,
+static int exynos7870_asv_dev_notify(struct notifier_block *nb,
 				     unsigned long action, void *data)
 {
-	struct exynos7870_asv_gpu *gpu = container_of(nb, typeof(*gpu), nb);
-	struct device *dev = data;
+	struct exynos7870_asv_dev *adev = container_of(nb, typeof(*adev), nb);
 
-	if (action == BUS_NOTIFY_BOUND_DRIVER && exynos7870_asv_is_gpu(dev))
-		exynos7870_asv_update_gpu(gpu, dev);
+	if (action == BUS_NOTIFY_BOUND_DRIVER)
+		exynos7870_asv_update_dev(adev, data);
 
 	return NOTIFY_DONE;
 }
 
-static int exynos7870_asv_update_bound_gpu(struct device *dev, void *data)
+static int exynos7870_asv_update_bound_dev(struct device *dev, void *data)
 {
-	if (exynos7870_asv_is_gpu(dev) && device_is_bound(dev))
-		exynos7870_asv_update_gpu(data, dev);
+	if (device_is_bound(dev))
+		exynos7870_asv_update_dev(data, dev);
 
 	return 0;
 }
 
-static void exynos7870_asv_gpu_unregister(void *data)
+static void exynos7870_asv_dev_unregister(void *data)
 {
-	struct exynos7870_asv_gpu *gpu = data;
+	struct exynos7870_asv_dev *adev = data;
 
-	bus_unregister_notifier(&platform_bus_type, &gpu->nb);
+	bus_unregister_notifier(&platform_bus_type, &adev->nb);
 }
 
-static int exynos7870_asv_init_gpu(struct exynos_asv *asv, u32 info)
+static int exynos7870_asv_init_devs(struct exynos_asv *asv)
 {
-	struct exynos7870_asv_gpu *gpu;
-	int ret;
+	struct exynos7870_asv_dev *adev;
+	int ret, i;
 
-	gpu = devm_kzalloc_obj(asv->dev, *gpu);
-	if (!gpu)
+	adev = devm_kzalloc_obj(asv->dev, *adev);
+	if (!adev)
 		return -ENOMEM;
 
-	gpu->asv = asv;
-	gpu->subsys.asv = asv;
-	ret = exynos7870_asv_init_subsys(asv, &gpu->subsys, &exynos7870_asv_gpu,
-					 "GPU", info);
-	if (ret || !gpu->subsys.table.buf)
-		return ret;
+	adev->asv = asv;
+	for (i = 0; i < ARRAY_SIZE(exynos7870_asv_devs); i++) {
+		const struct exynos7870_asv_dev_desc *desc =
+			&exynos7870_asv_devs[i];
+		u32 info;
 
-	gpu->nb.notifier_call = exynos7870_asv_gpu_notify;
-	ret = bus_register_notifier(&platform_bus_type, &gpu->nb);
+		ret = exynos7870_asv_read_info(desc->word, &info);
+		if (ret) {
+			dev_warn(asv->dev, "%s: cannot read ASV fuses\n",
+				 desc->name);
+			continue;
+		}
+
+		adev->subsys[i].asv = asv;
+		ret = exynos7870_asv_init_subsys(asv, &adev->subsys[i],
+						 desc->dom, desc->name,
+						 (info >> desc->shift) & 0xffff);
+		if (ret)
+			return ret;
+	}
+
+	adev->nb.notifier_call = exynos7870_asv_dev_notify;
+	ret = bus_register_notifier(&platform_bus_type, &adev->nb);
 	if (ret)
 		return ret;
 
-	ret = devm_add_action_or_reset(asv->dev, exynos7870_asv_gpu_unregister,
-				       gpu);
+	ret = devm_add_action_or_reset(asv->dev, exynos7870_asv_dev_unregister,
+				       adev);
 	if (ret)
 		return ret;
 
-	/* The GPU may have been bound before the notifier was registered */
-	return bus_for_each_dev(&platform_bus_type, NULL, gpu,
-				exynos7870_asv_update_bound_gpu);
+	/* A device may have been bound before the notifier was registered */
+	return bus_for_each_dev(&platform_bus_type, NULL, adev,
+				exynos7870_asv_update_bound_dev);
 }
 
 int exynos7870_asv_init(struct exynos_asv *asv)
 {
-	u32 cpu_info, gpu_info, ver_info;
+	u32 cpu_info, ver_info;
 	char name[16];
 	int ret, i;
 
@@ -445,9 +591,6 @@ int exynos7870_asv_init(struct exynos_asv *asv)
 	asv->opp_get_voltage = exynos7870_asv_opp_get_voltage;
 
 	ret = exynos7870_asv_read_info(EXYNOS7870_ASV_INFO_CPU, &cpu_info);
-	if (!ret)
-		ret = exynos7870_asv_read_info(EXYNOS7870_ASV_INFO_G3D,
-					       &gpu_info);
 	if (!ret)
 		ret = exynos7870_asv_read_info(EXYNOS7870_ASV_INFO_VERSION,
 					       &ver_info);
@@ -473,5 +616,5 @@ int exynos7870_asv_init(struct exynos_asv *asv)
 			return ret;
 	}
 
-	return exynos7870_asv_init_gpu(asv, gpu_info & 0xffff);
+	return exynos7870_asv_init_devs(asv);
 }
