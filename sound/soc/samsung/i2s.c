@@ -553,6 +553,16 @@ static int i2s_set_sysclk(struct snd_soc_dai *dai, int clk_id, unsigned int rfs,
 	case SAMSUNG_I2S_RCLKSRC_1: /* clock corrsponding to IISMOD[10] := 1 */
 		mask = 1 << i2s_regs->rclksrc_off;
 
+		/*
+		 * With the source mux exposed as a clock, the clock tree
+		 * chooses the source (assigned-clock-parents) and op_clk
+		 * follows it: do not let a machine driver override that.
+		 */
+		if (priv->clk_data.clks) {
+			priv->rclk_srcrate = clk_get_rate(priv->op_clk);
+			return 0;
+		}
+
 		if ((priv->quirks & QUIRK_NO_MUXPSR)
 				|| (clk_id == SAMSUNG_I2S_RCLKSRC_0))
 			clk_id = 0;
