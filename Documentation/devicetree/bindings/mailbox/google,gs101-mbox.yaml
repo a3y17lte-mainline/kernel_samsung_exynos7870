@@ -18,10 +18,16 @@ description:
   The controller just raises the interrupt to the firmware after the
   ACPM interface has written the message to SRAM.
 
+  The mailbox between the application processor and the modem of the
+  Exynos7870 uses the 16 interrupts in each direction as separate channels and
+  its shared registers for status words. The mailbox specifier is the
+  interrupt number.
+
 properties:
   compatible:
     enum:
       - google,gs101-mbox
+      - samsung,exynos7870-mbox
       - samsung,exynos850-mbox
 
   reg:
@@ -39,7 +45,12 @@ properties:
     maxItems: 1
 
   '#mbox-cells':
-    const: 0
+    enum: [0, 1]
+
+  wakeup-source:
+    description:
+      A message from the peer, for example the modem reporting an incoming
+      call, wakes the system.
 
 required:
   - compatible
@@ -48,6 +59,21 @@ required:
   - clock-names
   - interrupts
   - '#mbox-cells'
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: samsung,exynos7870-mbox
+    then:
+      properties:
+        '#mbox-cells':
+          const: 1
+    else:
+      properties:
+        '#mbox-cells':
+          const: 0
 
 additionalProperties: false
 
