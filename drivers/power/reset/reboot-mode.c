@@ -119,6 +119,17 @@ int reboot_mode_register(struct reboot_mode_driver *reboot)
 		list_add_tail(&info->list, &reboot->head);
 	}
 
+	/*
+	 * A reset that does not come through the reboot notifier (watchdog,
+	 * a hang, a forced reset) leaves the mode register as it is, and a
+	 * bootloader that remembers the last mode starts the same thing
+	 * again: a recovery that hangs is then all the phone boots. Ask for a
+	 * normal boot from the start; a reboot with a mode overwrites it.
+	 */
+	list_for_each_entry(info, &reboot->head, list)
+		if (!strcmp(info->mode, "normal"))
+			reboot->write(reboot, info->magic);
+
 	reboot->reboot_notifier.notifier_call = reboot_mode_notify;
 	register_reboot_notifier(&reboot->reboot_notifier);
 
