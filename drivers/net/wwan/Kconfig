@@ -110,6 +110,18 @@ config EXYNOS_MODEM
 	  To compile this driver as a module, choose M here: the module will be
 	  called exynos_modem.
 
+config EXYNOS_MODEM_KUNIT_TEST
+	tristate "KUnit tests for the Exynos modem link helpers" if !KUNIT_ALL_TESTS
+	depends on KUNIT
+	default KUNIT_ALL_TESTS
+	help
+	  KUnit tests for the helpers of the Samsung Exynos integrated modem
+	  interface that build and parse link frames and move them through
+	  the ring buffers shared with the modem. The helpers work on plain
+	  memory, so the tests run on any architecture and without the driver.
+
+	  If unsure, say N.
+
 config IOSM
 	tristate "IOSM Driver for Intel M.2 WWAN Device"
 	depends on PCI
