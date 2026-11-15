@@ -708,7 +708,9 @@
 			compatible = "samsung,exynos7870-hsi2c",
 				     "samsung,exynos7-hsi2c";
 			reg = <0x10510000 0x2000>;
-			interrupts = <GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 371 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 372 IRQ_TYPE_LEVEL_HIGH>;
+			samsung,hsi2c-batcher;
 
 			pinctrl-0 = <&hsi2c0_bus>;
 			pinctrl-names = "default";
