@@ -36,9 +36,16 @@
 
 #define MIN_FB_WIDTH_FOR_16WORD_BURST 128
 
-#define WINDOWS_NR	2
+#define MAX_WINDOWS	2
+
+static const enum drm_plane_type decon_win_types[] = {
+	DRM_PLANE_TYPE_PRIMARY,
+	DRM_PLANE_TYPE_CURSOR,
+};
 
 struct decon_data {
+	unsigned int nr_windows;
+	const enum drm_plane_type *win_types;
 	unsigned int vidw_buf_start_base;
 	unsigned int shadowcon_win_protect_shift;
 	unsigned int wincon_burstlen_shift;
@@ -47,12 +54,16 @@ struct decon_data {
 };
 
 static const struct decon_data exynos7_decon_data = {
+	.nr_windows = ARRAY_SIZE(decon_win_types),
+	.win_types = decon_win_types,
 	.vidw_buf_start_base = 0x80,
 	.shadowcon_win_protect_shift = 10,
 	.wincon_burstlen_shift = 11,
 };
 
 static const struct decon_data exynos7870_decon_data = {
+	.nr_windows = ARRAY_SIZE(decon_win_types),
+	.win_types = decon_win_types,
 	.vidw_buf_start_base = 0x880,
 	.shadowcon_win_protect_shift = 8,
 	.wincon_burstlen_shift = 10,
@@ -65,8 +76,8 @@ struct decon_context {
 	struct drm_device		*drm_dev;
 	void				*dma_priv;
 	struct exynos_drm_crtc		*crtc;
-	struct exynos_drm_plane		planes[WINDOWS_NR];
-	struct exynos_drm_plane_config	configs[WINDOWS_NR];
+	struct exynos_drm_plane		planes[MAX_WINDOWS];
+	struct exynos_drm_plane_config	configs[MAX_WINDOWS];
 	struct clk			*pclk;
 	struct clk			*aclk;
 	struct clk			*eclk;
@@ -105,11 +116,6 @@ static const uint32_t decon_formats[] = {
 	DRM_FORMAT_ABGR8888,
 	DRM_FORMAT_RGBA8888,
 	DRM_FORMAT_BGRA8888,
-};
-
-static const enum drm_plane_type decon_win_types[WINDOWS_NR] = {
-	DRM_PLANE_TYPE_PRIMARY,
-	DRM_PLANE_TYPE_CURSOR,
 };
 
 /**
@@ -155,7 +161,7 @@ static void decon_clear_channels(struct decon_context *ctx)
 	u32 val;
 
 	/* Check if any channel is enabled. */
-	for (win = 0; win < WINDOWS_NR; win++) {
+	for (win = 0; win < ctx->data->nr_windows; win++) {
 		val = readl(ctx->regs + WINCON(win));
 
 		if (val & WINCONx_ENWIN) {
@@ -414,7 +420,7 @@ static void decon_atomic_begin(struct exynos_drm_crtc *crtc)
 	struct decon_context *ctx = crtc->ctx;
 	int i;
 
-	for (i = 0; i < WINDOWS_NR; i++)
+	for (i = 0; i < ctx->data->nr_windows; i++)
 		decon_shadow_protect_win(ctx, i, true);
 }
 
@@ -539,7 +545,7 @@ static void decon_atomic_flush(struct exynos_drm_crtc *crtc)
 	struct decon_context *ctx = crtc->ctx;
 	int i;
 
-	for (i = 0; i < WINDOWS_NR; i++)
+	for (i = 0; i < ctx->data->nr_windows; i++)
 		decon_shadow_protect_win(ctx, i, false);
 	exynos_crtc_handle_event(crtc);
 }
@@ -626,7 +632,7 @@ static void decon_atomic_disable(struct exynos_drm_crtc *crtc)
 	 * suspend that connector. Otherwise we might try to scan from
 	 * a destroyed buffer later.
 	 */
-	for (i = 0; i < WINDOWS_NR; i++)
+	for (i = 0; i < ctx->data->nr_windows; i++)
 		decon_disable_plane(crtc, &ctx->planes[i]);
 
 	pm_runtime_put_sync(ctx->dev);
@@ -701,11 +707,11 @@ static int decon_bind(struct device *dev, struct device *master, void *data)
 		return ret;
 	}
 
-	for (i = 0; i < WINDOWS_NR; i++) {
+	for (i = 0; i < ctx->data->nr_windows; i++) {
 		ctx->configs[i].pixel_formats = decon_formats;
 		ctx->configs[i].num_pixel_formats = ARRAY_SIZE(decon_formats);
 		ctx->configs[i].zpos = i;
-		ctx->configs[i].type = decon_win_types[i];
+		ctx->configs[i].type = ctx->data->win_types[i];
 
 		ret = exynos_plane_init(drm_dev, &ctx->planes[i], i,
 					&ctx->configs[i]);
