@@ -92,6 +92,24 @@ config RPMSG_WWAN_CTRL
 	  To compile this driver as a module, choose M here: the module will be
 	  called rpmsg_wwan_ctrl.
 
+config EXYNOS_MODEM
+	tristate "Samsung Exynos integrated modem"
+	depends on ARCH_EXYNOS || COMPILE_TEST
+	depends on ARM64 || COMPILE_TEST
+	depends on HAVE_ARM_SMCCC
+	depends on MAILBOX
+	depends on PM
+	help
+	  Interface to the cellular modem (communication processor) that is
+	  integrated in Samsung Exynos SoCs such as the Exynos7870, with the
+	  Samsung IPC version 5 protocol over shared memory.
+
+	  The driver loads and starts the modem and serves its performance
+	  requests.
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called exynos_modem.
+
 config IOSM
 	tristate "IOSM Driver for Intel M.2 WWAN Device"
 	depends on PCI
