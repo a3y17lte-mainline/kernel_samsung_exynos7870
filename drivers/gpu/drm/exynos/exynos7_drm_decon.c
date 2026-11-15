@@ -447,10 +447,11 @@ static void decon_win_set_colkey(struct decon_context *ctx, unsigned int win)
 static void decon_win_set_blending(struct decon_context *ctx, unsigned int win,
 				   struct drm_plane_state *state)
 {
-	bool pixel_alpha = state->fb->format->has_alpha &&
+	/* Window 0 is the bottom one: it has nothing to blend with. */
+	bool pixel_alpha = win != 0 && state->fb->format->has_alpha &&
 		state->pixel_blend_mode != DRM_MODE_BLEND_PIXEL_NONE;
 	unsigned int alpha = state->alpha >> 8;
-	bool plane_alpha = alpha != 0xff;
+	bool plane_alpha = win != 0 && alpha != 0xff;
 	u32 alpha0 = 0x0, alpha1 = 0xff;
 	u32 a, b, val;
 
@@ -476,6 +477,9 @@ static void decon_win_set_blending(struct decon_context *ctx, unsigned int win,
 	writel(VIDOSDxD_ALPHA1_R_F(alpha1) | VIDOSDxD_ALPHA1_G_F(alpha1) |
 	       VIDOSDxD_ALPHA1_B_F(alpha1), ctx->regs + VIDOSD_D(win));
 
+	if (win == 0)
+		return;
+
 	if (!pixel_alpha && !plane_alpha) {
 		a = BLENDE_COEF_ONE;
 		b = BLENDE_COEF_ZERO;
@@ -488,7 +492,7 @@ static void decon_win_set_blending(struct decon_context *ctx, unsigned int win,
 		b = BLENDE_COEF_ONE_MINUS_ALPHA_A;
 	}
 
-	/* Window 0 is the bottom one: the equations start at window 1. */
+	/* The equations start at window 1. */
 	writel(BLENDE_A_FUNC(a) | BLENDE_B_FUNC(b) |
 	       BLENDE_P_FUNC(BLENDE_COEF_ZERO) | BLENDE_Q_FUNC(BLENDE_COEF_ZERO),
 	       ctx->regs + BLENDE(win - 1));
@@ -611,7 +615,7 @@ static void decon_update_plane(struct exynos_drm_crtc *crtc,
 	if (win != 0)
 		decon_win_set_colkey(ctx, win);
 
-	if (win != 0 && ctx->data->has_blending)
+	if (ctx->data->has_blending)
 		decon_win_set_blending(ctx, win, &state->base);
 
 	/* wincon */
@@ -836,7 +840,6 @@ static int decon_bind(struct device *dev, struct device *master, void *data)
 		ctx->configs[i].num_pixel_formats = ARRAY_SIZE(decon_formats);
 		ctx->configs[i].zpos = i;
 		ctx->configs[i].type = ctx->data->win_types[i];
-		/* Window 0 is the bottom one: it has nothing to blend with. */
 		if (i != 0 && ctx->data->has_blending)
 			ctx->configs[i].capabilities =
 				EXYNOS_DRM_PLANE_CAP_PIX_BLEND |
