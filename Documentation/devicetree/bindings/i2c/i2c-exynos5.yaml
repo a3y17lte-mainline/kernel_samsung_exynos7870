@@ -51,7 +51,19 @@ properties:
     maxItems: 1
 
   interrupts:
-    maxItems: 1
+    minItems: 1
+    items:
+      - description: controller interrupt
+      - description: batcher interrupt
+
+  samsung,hsi2c-batcher:
+    type: boolean
+    description:
+      The controller is shared with another processor of the SoC, such as the
+      modem, which also talks to the PMIC on this bus. Neither side may drive
+      the controller directly. Each hands its transfers to the batcher in
+      front of the controller, which takes a hardware semaphore, runs the
+      transfer and reports back with the batcher interrupt.
 
   clock-frequency:
     default: 100000
@@ -104,6 +116,18 @@ allOf:
     else:
       properties:
         clocks:
+          maxItems: 1
+
+  - if:
+      required:
+        - samsung,hsi2c-batcher
+    then:
+      properties:
+        interrupts:
+          minItems: 2
+    else:
+      properties:
+        interrupts:
           maxItems: 1
 
 unevaluatedProperties: false
