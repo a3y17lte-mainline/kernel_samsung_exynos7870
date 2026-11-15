@@ -26,6 +26,13 @@ properties:
   interrupts:
     maxItems: 1
 
+  io-channels:
+    maxItems: 1
+    description: Battery temperature, from the thermistor on an ADC input.
+
+  io-channel-names:
+    const: batt-temp
+
 required:
   - compatible
   - reg
