@@ -236,6 +236,22 @@
 			iommu-addresses = <&decon 0x67000000 (720 * 1280 * 4)>;
 			no-map;
 		};
+
+		/* Left by the bootloader for the modem's loader */
+		modem_bootinfo: modem-bootinfo@affff000 {
+			reg = <0x0 0xaffff000 0x1000>;
+			no-map;
+		};
+
+		modem_firmware: modem-firmware@b0000000 {
+			reg = <0x0 0xb0000000 0x7400000>;
+			no-map;
+		};
+
+		modem_ipc: modem-ipc@b7400000 {
+			reg = <0x0 0xb7400000 0x400000>;
+			no-map;
+		};
 	};
 
 	sound {
@@ -915,6 +931,12 @@
 	};
 };
 
+&mbox_cp {
+	/* incoming calls and messages */
+	wakeup-source;
+	status = "okay";
+};
+
 &mmc0 {
 	pinctrl-0 = <&sd0_clk &sd0_cmd &sd0_rdqs &sd0_bus1 &sd0_bus4 &sd0_bus8>;
 	pinctrl-names = "default";
@@ -982,6 +1004,15 @@
 	samsung,dw-mshc-sdr-timing = <0 3>;
 	samsung,dw-mshc-ddr-timing = <1 2>;
 
+	status = "okay";
+};
+
+&modem {
+	memory-region = <&modem_firmware>, <&modem_ipc>, <&modem_bootinfo>;
+	memory-region-names = "firmware", "ipc", "bootinfo";
+	firmware-name = "samsung/a3y17lte/modem.bin",
+			"samsung/a3y17lte/modem-nv.bin";
+	samsung,board-revision = <4>;
 	status = "okay";
 };
 
