@@ -1,0 +1,137 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/net/samsung,exynos7870-modem.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Samsung Exynos integrated cellular modem
+
+maintainers:
+  - Martin Štrobl <recordyletsplays@gmail.com>
+
+description:
+  Some Exynos SoCs contain a cellular modem (communication processor, "CP",
+  Shannon series) next to the application processor. The modem runs its
+  firmware from a region of the system RAM that the bootloader has set aside
+  and assigned to it. The application processor loads the firmware, starts the
+  modem through the power management unit and then exchanges messages with it
+  through a mailbox and a second, shared region of RAM.
+
+properties:
+  compatible:
+    const: samsung,exynos7870-modem
+
+  interrupts:
+    items:
+      - description: the modem failed to boot
+      - description: the modem's watchdog expired
+
+  interrupt-names:
+    items:
+      - const: fail
+      - const: watchdog
+
+  mboxes:
+    items:
+      - description: link messages
+      - description: link status and flow control
+      - description:
+          performance request of the modem, and sleep state of the application
+          processor in the other direction
+      - description: the modem is active
+      - description: CPU frequency request of the modem
+      - description: memory interface frequency request of the modem
+      - description: internal bus frequency request of the modem
+
+  mbox-names:
+    items:
+      - const: msg
+      - const: status
+      - const: perf
+      - const: active
+      - const: perf-cpu
+      - const: perf-mif
+      - const: perf-int
+
+  memory-region:
+    items:
+      - description: memory of the modem, which receives its firmware
+      - description: memory shared between application processor and modem
+      - description:
+          data that the bootloader left for the loader of the modem, such as
+          the memory configuration
+
+  memory-region-names:
+    items:
+      - const: firmware
+      - const: ipc
+      - const: bootinfo
+
+  firmware-name:
+    items:
+      - description:
+          the firmware image, as the board's RADIO partition holds it
+      - description:
+          the modem's non-volatile data, which the modem changes while it runs
+
+  samsung,syscon-phandle:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: the power management unit, which controls the modem's power
+
+  samsung,mif-devfreq:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      The memory controller. The modem shares the DRAM, follows the memory
+      interface frequency and can ask for a minimum.
+
+  samsung,int-devfreq:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description:
+      The internal bus, for which the modem can ask for a minimum frequency.
+
+  samsung,board-revision:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    maximum: 255
+    description:
+      Hardware revision of the board as the bootloader counts it. The modem
+      firmware uses it to select its radio configuration.
+
+  samsung,dual-sim:
+    type: boolean
+    description: the board has two SIM slots
+
+required:
+  - compatible
+  - interrupts
+  - interrupt-names
+  - mboxes
+  - mbox-names
+  - memory-region
+  - memory-region-names
+  - firmware-name
+  - samsung,syscon-phandle
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    modem {
+        compatible = "samsung,exynos7870-modem";
+        interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>,
+                     <GIC_SPI 479 IRQ_TYPE_LEVEL_HIGH>;
+        interrupt-names = "fail", "watchdog";
+        mboxes = <&mbox_cp 0>, <&mbox_cp 2>, <&mbox_cp 3>, <&mbox_cp 4>,
+                 <&mbox_cp 5>, <&mbox_cp 6>, <&mbox_cp 7>;
+        mbox-names = "msg", "status", "perf", "active", "perf-cpu",
+                     "perf-mif", "perf-int";
+        memory-region = <&modem_firmware>, <&modem_ipc>, <&modem_bootinfo>;
+        memory-region-names = "firmware", "ipc", "bootinfo";
+        samsung,syscon-phandle = <&pmu_system_controller>;
+        samsung,mif-devfreq = <&dmc>;
+        samsung,int-devfreq = <&bus_int>;
+        firmware-name = "samsung/a3y17lte/modem.bin",
+                        "samsung/a3y17lte/modem-nv.bin";
+        samsung,board-revision = <4>;
+    };
