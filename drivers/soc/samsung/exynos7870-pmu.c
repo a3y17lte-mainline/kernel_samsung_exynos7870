@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Exynos7870 PMU: system sleep (suspend-to-RAM)
+ * Exynos7870 PMU: system sleep (suspend-to-RAM) and the restart flag
  *
  * The firmware (PSCI 0.1, no SYSTEM_SUSPEND) powers the system down on a
  * CPU_SUSPEND request at affinity level 3 from the last online CPU. It only
@@ -14,7 +14,9 @@
 #include <linux/array_size.h>
 #include <linux/bits.h>
 #include <linux/printk.h>
+#include <linux/notifier.h>
 #include <linux/psci.h>
+#include <linux/reboot.h>
 #include <linux/suspend.h>
 #include <linux/soc/samsung/exynos-pmu.h>
 
@@ -386,15 +388,42 @@ static const struct platform_suspend_ops exynos7870_suspend_ops = {
 	.valid	= suspend_valid_only_mem,
 };
 
-static void exynos7870_pmu_init(void)
+static void exynos7870_suspend_init(void)
 {
 	suspend_set_ops(&exynos7870_suspend_ops);
 }
 #else
-static void exynos7870_pmu_init(void)
+static void exynos7870_suspend_init(void)
 {
 }
 #endif
+
+/*
+ * The bootloader of the Exynos7870 phones (S-Boot) takes a boot with a
+ * charger attached for the plug-in of a powered-off phone, and starts the
+ * system in its charging mode, unless INFORM2 says that the system restarted.
+ */
+#define EXYNOS7870_INFORM2		0x0808
+#define EXYNOS7870_INFORM2_RESTART	0x12345678
+
+static int exynos7870_reboot_notify(struct notifier_block *nb,
+				    unsigned long action, void *data)
+{
+	pmu_raw_writel(action == SYS_RESTART ? EXYNOS7870_INFORM2_RESTART : 0,
+		       EXYNOS7870_INFORM2);
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block exynos7870_reboot_nb = {
+	.notifier_call = exynos7870_reboot_notify,
+};
+
+static void exynos7870_pmu_init(void)
+{
+	exynos7870_suspend_init();
+	register_reboot_notifier(&exynos7870_reboot_nb);
+}
 
 const struct exynos_pmu_data exynos7870_pmu_data = {
 	.pmu_config		= exynos7870_pmu_config,
