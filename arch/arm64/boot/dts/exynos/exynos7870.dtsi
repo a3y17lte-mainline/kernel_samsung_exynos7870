@@ -54,6 +54,23 @@
 		status = "disabled";
 	};
 
+	/* The memory regions of the modem depend on the board's bootloader. */
+	modem: modem {
+		compatible = "samsung,exynos7870-modem";
+		interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 479 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "fail", "watchdog";
+		mboxes = <&mbox_cp 0>, <&mbox_cp 2>, <&mbox_cp 3>,
+			 <&mbox_cp 4>, <&mbox_cp 5>, <&mbox_cp 6>,
+			 <&mbox_cp 7>;
+		mbox-names = "msg", "status", "perf", "active", "perf-cpu",
+			     "perf-mif", "perf-int";
+		samsung,syscon-phandle = <&pmu_system_controller>;
+		samsung,mif-devfreq = <&dmc>;
+		samsung,int-devfreq = <&bus_int>;
+		status = "disabled";
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -675,6 +692,16 @@
 			interrupt-controller;
 			#address-cells = <0>;
 			#interrupt-cells = <3>;
+		};
+
+		mbox_cp: mailbox@10500000 {
+			compatible = "samsung,exynos7870-mbox";
+			reg = <0x10500000 0x180>;
+			interrupts = <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cmu_mif CLK_GOUT_MIF_MAILBOX_CP_PCLK>;
+			clock-names = "pclk";
+			#mbox-cells = <1>;
+			status = "disabled";
 		};
 
 		hsi2c0: i2c@10510000 {
