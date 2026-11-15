@@ -50,6 +50,11 @@
 
 #define SHADOWCON_WINx_PROTECT(_shf, _win)	(1 << ((_shf) + (_win)))
 
+/* WINCHMAP0: the DMA channel of each window (Exynos7870) */
+#define WINCHMAP0				0x40
+#define WINCHMAP0_WxCHMAP_F(_win, _ch)		((_ch) << ((_win) * 4))
+#define WINCHMAP0_WxCHMAP_F_MASK(_win)		(0x7 << ((_win) * 4))
+
 /* WINCONx */
 #define WINCON(_win)				(0x50 + ((_win) * 4))
 

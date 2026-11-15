@@ -19,6 +19,8 @@
 #include <video/of_display_timing.h>
 #include <video/of_videomode.h>
 
+#include <drm/drm_atomic.h>
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_framebuffer.h>
@@ -37,16 +39,32 @@
 
 #define MIN_FB_WIDTH_FOR_16WORD_BURST 128
 
-#define MAX_WINDOWS	2
+#define MAX_WINDOWS	3
 
 static const enum drm_plane_type decon_win_types[] = {
 	DRM_PLANE_TYPE_PRIMARY,
 	DRM_PLANE_TYPE_CURSOR,
 };
 
+/*
+ * Exynos7870 has three windows and nothing that needs a cursor plane more
+ * than a second overlay. Each window reads through one of three DMA channels
+ * (1 and 2 are IDMA_G0 and IDMA_G1 in the vendor kernel, 0 the third one);
+ * window 0 gets the channel the vendor kernel gives its framebuffer.
+ */
+static const enum drm_plane_type exynos7870_decon_win_types[] = {
+	DRM_PLANE_TYPE_PRIMARY,
+	DRM_PLANE_TYPE_OVERLAY,
+	DRM_PLANE_TYPE_OVERLAY,
+};
+
+static const u8 exynos7870_decon_win_channels[] = { 1, 2, 0 };
+
 struct decon_data {
 	unsigned int nr_windows;
 	const enum drm_plane_type *win_types;
+	const u8 *win_channels;
+	unsigned int min_win_bytes;
 	unsigned int vidw_buf_start_base;
 	unsigned int shadowcon_win_protect_shift;
 	unsigned int wincon_burstlen_shift;
@@ -64,8 +82,11 @@ static const struct decon_data exynos7_decon_data = {
 };
 
 static const struct decon_data exynos7870_decon_data = {
-	.nr_windows = ARRAY_SIZE(decon_win_types),
-	.win_types = decon_win_types,
+	.nr_windows = ARRAY_SIZE(exynos7870_decon_win_types),
+	.win_types = exynos7870_decon_win_types,
+	.win_channels = exynos7870_decon_win_channels,
+	/* the vendor kernel rejects narrower windows */
+	.min_win_bytes = 128,
 	.vidw_buf_start_base = 0x880,
 	.shadowcon_win_protect_shift = 8,
 	.wincon_burstlen_shift = 10,
@@ -477,6 +498,32 @@ static void decon_win_set_blending(struct decon_context *ctx, unsigned int win,
 	       ctx->regs + BLENDE(win - 1));
 }
 
+static int decon_atomic_check(struct exynos_drm_crtc *crtc,
+			      struct drm_crtc_state *state)
+{
+	struct decon_context *ctx = crtc->ctx;
+	const struct drm_plane_state *plane_state;
+	struct drm_plane *plane;
+
+	if (!ctx->data->min_win_bytes)
+		return 0;
+
+	drm_atomic_crtc_state_for_each_plane_state(plane, plane_state, state) {
+		const struct exynos_drm_plane_state *exynos_state =
+			container_of_const(plane_state,
+					   struct exynos_drm_plane_state, base);
+
+		if (!plane_state->fb || !exynos_state->crtc.w)
+			continue;
+
+		if (exynos_state->crtc.w * plane_state->fb->format->cpp[0] <
+		    ctx->data->min_win_bytes)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
 static void decon_atomic_begin(struct exynos_drm_crtc *crtc)
 {
 	struct decon_context *ctx = crtc->ctx;
@@ -633,6 +680,18 @@ static void decon_init(struct decon_context *ctx)
 	if (ctx->data->has_blending)
 		writel(BLENDCON_NEW_8BIT_ALPHA_VALUE, ctx->regs + BLENDCON);
 
+	if (ctx->data->win_channels) {
+		unsigned int win;
+
+		val = readl(ctx->regs + WINCHMAP0);
+		for (win = 0; win < ctx->data->nr_windows; win++) {
+			val &= ~WINCHMAP0_WxCHMAP_F_MASK(win);
+			val |= WINCHMAP0_WxCHMAP_F(win,
+					ctx->data->win_channels[win]);
+		}
+		writel(val, ctx->regs + WINCHMAP0);
+	}
+
 	if (ctx->i80_if)
 		writel(VIDCON1_VCLK_RUN_VDEN_DISABLE, ctx->regs + VIDCON1(0));
 	else
@@ -711,6 +770,7 @@ static const struct exynos_drm_crtc_ops decon_crtc_ops = {
 	.atomic_disable = decon_atomic_disable,
 	.enable_vblank = decon_enable_vblank,
 	.disable_vblank = decon_disable_vblank,
+	.atomic_check = decon_atomic_check,
 	.atomic_begin = decon_atomic_begin,
 	.update_plane = decon_update_plane,
 	.disable_plane = decon_disable_plane,
