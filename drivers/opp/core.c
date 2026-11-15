@@ -1205,10 +1205,6 @@ static int _set_required_opps(struct device *dev, struct opp_table *opp_table,
 	if (!devs)
 		return 0;
 
-	/* required-opps not fully initialized yet */
-	if (lazy_linking_pending(opp_table))
-		return -EBUSY;
-
 	/* Scaling up? Set required OPPs in normal order, else reverse */
 	if (up) {
 		index = 0;
@@ -1222,6 +1218,10 @@ static int _set_required_opps(struct device *dev, struct opp_table *opp_table,
 
 	while (index != target) {
 		if (devs[index]) {
+			/* required-opps not fully initialized yet */
+			if (lazy_linking_pending(opp_table))
+				return -EBUSY;
+
 			required_opp = opp ? opp->required_opps[index] : NULL;
 
 			ret = _set_opp_level(devs[index], required_opp);
