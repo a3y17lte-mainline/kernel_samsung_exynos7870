@@ -19,6 +19,7 @@
 #include <video/of_display_timing.h>
 #include <video/of_videomode.h>
 
+#include <drm/drm_blend.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_vblank.h>
@@ -51,6 +52,7 @@ struct decon_data {
 	unsigned int wincon_burstlen_shift;
 	bool has_hw_trigger;
 	bool has_content_firewall;
+	bool has_blending;
 };
 
 static const struct decon_data exynos7_decon_data = {
@@ -69,6 +71,7 @@ static const struct decon_data exynos7870_decon_data = {
 	.wincon_burstlen_shift = 10,
 	.has_hw_trigger = true,
 	.has_content_firewall = true,
+	.has_blending = true,
 };
 
 struct decon_context {
@@ -415,6 +418,61 @@ static void decon_win_set_colkey(struct decon_context *ctx, unsigned int win)
 	writel(keycon1, ctx->regs + WKEYCON1_BASE(win));
 }
 
+/*
+ * Blend a window with the ones below it, following the plane's pixel blend
+ * mode and alpha. The window's colour is A, the result of the lower windows
+ * is B, and the blend equation selects a factor for each.
+ */
+static void decon_win_set_blending(struct decon_context *ctx, unsigned int win,
+				   struct drm_plane_state *state)
+{
+	bool pixel_alpha = state->fb->format->has_alpha &&
+		state->pixel_blend_mode != DRM_MODE_BLEND_PIXEL_NONE;
+	unsigned int alpha = state->alpha >> 8;
+	bool plane_alpha = alpha != 0xff;
+	u32 alpha0 = 0x0, alpha1 = 0xff;
+	u32 a, b, val;
+
+	val = readl(ctx->regs + WINCON(win));
+	val &= ~(WINCONx_BLD_PIX | WINCONx_ALPHA_MUL);
+	val |= WINCONx_ALPHA_SEL;
+	if (pixel_alpha)
+		val |= WINCONx_BLD_PIX;
+
+	if (plane_alpha) {
+		alpha0 = alpha;
+		alpha1 = 0x0;
+		/* With pixel alpha, scale it; without, ALPHA0 is the alpha. */
+		if (pixel_alpha)
+			val |= WINCONx_ALPHA_MUL;
+		else
+			val &= ~WINCONx_ALPHA_SEL;
+	}
+	writel(val, ctx->regs + WINCON(win));
+
+	writel(VIDOSDxC_ALPHA0_R_F(alpha0) | VIDOSDxC_ALPHA0_G_F(alpha0) |
+	       VIDOSDxC_ALPHA0_B_F(alpha0), ctx->regs + VIDOSD_C(win));
+	writel(VIDOSDxD_ALPHA1_R_F(alpha1) | VIDOSDxD_ALPHA1_G_F(alpha1) |
+	       VIDOSDxD_ALPHA1_B_F(alpha1), ctx->regs + VIDOSD_D(win));
+
+	if (!pixel_alpha && !plane_alpha) {
+		a = BLENDE_COEF_ONE;
+		b = BLENDE_COEF_ZERO;
+	} else if (pixel_alpha &&
+		   state->pixel_blend_mode == DRM_MODE_BLEND_PREMULTI) {
+		a = plane_alpha ? BLENDE_COEF_ALPHA0 : BLENDE_COEF_ONE;
+		b = BLENDE_COEF_ONE_MINUS_ALPHA_A;
+	} else {
+		a = BLENDE_COEF_ALPHA_A;
+		b = BLENDE_COEF_ONE_MINUS_ALPHA_A;
+	}
+
+	/* Window 0 is the bottom one: the equations start at window 1. */
+	writel(BLENDE_A_FUNC(a) | BLENDE_B_FUNC(b) |
+	       BLENDE_P_FUNC(BLENDE_COEF_ZERO) | BLENDE_Q_FUNC(BLENDE_COEF_ZERO),
+	       ctx->regs + BLENDE(win - 1));
+}
+
 static void decon_atomic_begin(struct exynos_drm_crtc *crtc)
 {
 	struct decon_context *ctx = crtc->ctx;
@@ -506,6 +564,9 @@ static void decon_update_plane(struct exynos_drm_crtc *crtc,
 	if (win != 0)
 		decon_win_set_colkey(ctx, win);
 
+	if (win != 0 && ctx->data->has_blending)
+		decon_win_set_blending(ctx, win, &state->base);
+
 	/* wincon */
 	val = readl(ctx->regs + WINCON(win));
 	val |= WINCONx_TRIPLE_BUF_MODE;
@@ -564,6 +625,9 @@ static void decon_init(struct decon_context *ctx)
 	writel(val, ctx->regs + VIDOUTCON0);
 
 	writel(VCLKCON0_CLKVALUP | VCLKCON0_VCLKFREE, ctx->regs + VCLKCON0);
+
+	if (ctx->data->has_blending)
+		writel(BLENDCON_NEW_8BIT_ALPHA_VALUE, ctx->regs + BLENDCON);
 
 	if (ctx->i80_if)
 		writel(VIDCON1_VCLK_RUN_VDEN_DISABLE, ctx->regs + VIDCON1(0));
@@ -712,6 +776,11 @@ static int decon_bind(struct device *dev, struct device *master, void *data)
 		ctx->configs[i].num_pixel_formats = ARRAY_SIZE(decon_formats);
 		ctx->configs[i].zpos = i;
 		ctx->configs[i].type = ctx->data->win_types[i];
+		/* Window 0 is the bottom one: it has nothing to blend with. */
+		if (i != 0 && ctx->data->has_blending)
+			ctx->configs[i].capabilities =
+				EXYNOS_DRM_PLANE_CAP_PIX_BLEND |
+				EXYNOS_DRM_PLANE_CAP_WIN_BLEND;
 
 		ret = exynos_plane_init(drm_dev, &ctx->planes[i], i,
 					&ctx->configs[i]);
