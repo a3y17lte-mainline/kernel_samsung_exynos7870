@@ -127,6 +127,7 @@
 #define CLK_CON_GAT_MIF_WRAP_ADC_IF_OSC_SYS		0x080c
 #define CLK_CON_GAT_MIF_HSI2C_AP_PCLKS			0x0828
 #define CLK_CON_GAT_MIF_HSI2C_CP_PCLKS			0x0828
+#define CLK_CON_GAT_MIF_MAILBOX_CP_PCLK			0x0828
 #define CLK_CON_GAT_MIF_WRAP_ADC_IF_PCLK_S0		0x0828
 #define CLK_CON_GAT_MIF_WRAP_ADC_IF_PCLK_S1		0x0828
 #define CLK_CON_GAT_MIF_HSI2C_AP_PCLKM			0x0840
@@ -662,6 +663,8 @@ static const struct samsung_gate_clock mif_gate_clks[] __initconst = {
 	GATE(CLK_GOUT_MIF_HSI2C_CP_PCLKS, "gout_mif_hsi2c_cp_pclks",
 	     "dout_mif_apb", CLK_CON_GAT_MIF_HSI2C_CP_PCLKS, 15, CLK_IS_CRITICAL
 	     | CLK_SET_RATE_PARENT, 0),
+	GATE(CLK_GOUT_MIF_MAILBOX_CP_PCLK, "gout_mif_mailbox_cp_pclk",
+	     "dout_mif_apb", CLK_CON_GAT_MIF_MAILBOX_CP_PCLK, 22, 0, 0),
 	GATE(CLK_GOUT_MIF_HSI2C_IPCLK, "gout_mif_hsi2c_ipclk", "dout_mif_hsi2c",
 	     CLK_CON_GAT_MIF_HSI2C_IPCLK, 2, CLK_IS_CRITICAL |
 	     CLK_SET_RATE_PARENT, 0),
