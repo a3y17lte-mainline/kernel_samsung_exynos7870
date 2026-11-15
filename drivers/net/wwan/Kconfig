@@ -125,6 +125,19 @@ config EXYNOS_MODEM_KUNIT_TEST
 
 	  If unsure, say N.
 
+config EXYNOS_MODEM_LEGACY_ABI
+	bool "Vendor kernel userspace interface for the Exynos modem"
+	depends on EXYNOS_MODEM
+	help
+	  Provide the character devices (umts_boot0, umts_ipc0, umts_rfs0, ...)
+	  and network interfaces (rmnet0, ...) of Samsung's vendor kernels, so
+	  that the modem software written for those kernels can be used
+	  unchanged: Samsung's boot daemon and radio interface library on
+	  Android, or libsamsung-ipc.
+
+	  The interface is used instead of the WWAN ports and links when the
+	  module parameter "legacy_abi" is set.
+
 config IOSM
 	tristate "IOSM Driver for Intel M.2 WWAN Device"
 	depends on PCI

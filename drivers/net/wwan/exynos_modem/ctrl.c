@@ -992,7 +992,10 @@ static int exmodem_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_link;
 
-	ret = exmodem_wwan_init(md);
+	if (exmodem_legacy_enabled())
+		ret = exmodem_legacy_init(md);
+	else
+		ret = exmodem_wwan_init(md);
 	if (ret)
 		goto err_mbox;
 
@@ -1035,7 +1038,10 @@ static void exmodem_remove(struct platform_device *pdev)
 {
 	struct exmodem *md = platform_get_drvdata(pdev);
 
-	exmodem_wwan_exit(md);
+	if (exmodem_legacy_enabled())
+		exmodem_legacy_exit(md);
+	else
+		exmodem_wwan_exit(md);
 	exmodem_shutdown(pdev);
 	exmodem_mbox_free(md);
 	cancel_work_sync(&md->active_work);

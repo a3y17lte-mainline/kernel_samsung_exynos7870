@@ -323,4 +323,14 @@ void exmodem_port_unregister(struct exmodem *md, struct exmodem_port *port);
 #define EXMODEM_MAGIC_DUMP	0x44554d50
 #define EXMODEM_MAGIC_CRASH	0xdeaddead
 
+#ifdef CONFIG_EXYNOS_MODEM_LEGACY_ABI
+bool exmodem_legacy_enabled(void);
+int exmodem_legacy_init(struct exmodem *md);
+void exmodem_legacy_exit(struct exmodem *md);
+#else
+static inline bool exmodem_legacy_enabled(void) { return false; }
+static inline int exmodem_legacy_init(struct exmodem *md) { return 0; }
+static inline void exmodem_legacy_exit(struct exmodem *md) { }
+#endif
+
 #endif /* __EXYNOS_MODEM_H__ */
