@@ -18,6 +18,7 @@
 #include <linux/clk.h>
 #include <linux/slab.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/spinlock.h>
 
@@ -58,12 +59,24 @@
 #define HSI2C_TIMING_FS3	0x68
 #define HSI2C_TIMING_SLA	0x6C
 #define HSI2C_ADDR		0x70
+#define HSI2C_SM_RELEASE	0x200
+
+/* Batcher Register Map */
+#define HSI2C_BATCHER_CON		0x500
+#define HSI2C_BATCHER_STATE		0x504
+#define HSI2C_BATCHER_INT_EN		0x508
+#define HSI2C_BATCHER_FIFO_STATUS	0x50C
+#define HSI2C_BATCHER_INT_STATUS	0x510
+#define HSI2C_BATCHER_OPCODE		0x600
+#define HSI2C_BATCHER_PAYLOAD		0x1000
 
 /* I2C_CTL Register bits */
 #define HSI2C_FUNC_MODE_I2C			(1u << 0)
 #define HSI2C_MASTER				(1u << 3)
 #define HSI2C_RXCHON				(1u << 6)
 #define HSI2C_TXCHON				(1u << 7)
+#define HSI2C_EXT_MSB				(1u << 29)
+#define HSI2C_EXT_ADDR				(1u << 30)
 #define HSI2C_SW_RST				(1u << 31)
 
 /* I2C_FIFO_CTL Register bits */
@@ -113,6 +126,10 @@
 #define HSI2C_AUTO_MODE				(1u << 31)
 #define HSI2C_10BIT_ADDR_MODE			(1u << 30)
 #define HSI2C_HS_MODE				(1u << 29)
+#define HSI2C_FILTER_EN_SCL			(1u << 28)
+#define HSI2C_FILTER_EN_SDA			(1u << 27)
+#define HSI2C_FTL_CYCLE_SCL(x)			((x) << 16)
+#define HSI2C_FTL_CYCLE_SDA(x)			((x) << 13)
 
 /* I2C_AUTO_CONF Register bits */
 #define HSI2C_READ_WRITE			(1u << 16)
@@ -162,7 +179,38 @@
 #define HSI2C_MASTER_ID(x)			((x & 0xff) << 24)
 #define MASTER_ID(x)				((x & 0x7) + 0x08)
 
+/* I2C_BATCHER_CON Register bits */
+#define HSI2C_BATCHER_RESET			(1u << 31)
+#define HSI2C_BATCHER_START			(1u << 4)
+#define HSI2C_BATCHER_DEDICATE			(1u << 1)
+#define HSI2C_BATCHER_ENABLE			(1u << 0)
+
+/* I2C_BATCHER_STATE Register bits */
+#define HSI2C_BATCHER_OPERATION_COMPLETE	(1u << 0)
+#define HSI2C_BATCHER_UNEXPECTED_INTR		(1u << 1)
+#define HSI2C_BATCHER_CONFIG_STATE		(1u << 6)
+#define HSI2C_BATCHER_CLEAN_INTR_STATE		(1u << 13)
+
+/* I2C_BATCHER_INT_EN Register bits */
+#define HSI2C_BATCHER_INT_ENABLE		(1u << 0)
+
+/*
+ * The batcher takes a list of register writes for the controller, one opcode
+ * byte (the register offset) and one payload word (the value) each, and the
+ * received bytes come back in the payload words of the RX_DATA opcodes.
+ */
+#define HSI2C_BATCHER_OP_END			0xff
+#define HSI2C_BATCHER_OP_UNUSED			0xff
+#define HSI2C_BATCHER_RX_FILL			0x77
+#define HSI2C_BATCHER_MAX_OPS			25
+#define HSI2C_BATCHER_SETUP_OPS			15
+#define HSI2C_BATCHER_MAX_LEN			\
+	(HSI2C_BATCHER_MAX_OPS - HSI2C_BATCHER_SETUP_OPS - 1)
+#define HSI2C_BATCHER_TRAILING_COUNT		0x2ff
+
 #define EXYNOS5_I2C_TIMEOUT (msecs_to_jiffies(100))
+#define EXYNOS5_BATCHER_RX_TIMEOUT_MS		500
+#define EXYNOS5_BATCHER_TX_TIMEOUT_MS		1000
 
 enum i2c_type_exynos {
 	I2C_TYPE_EXYNOS5,
@@ -205,6 +253,22 @@ struct exynos5_i2c {
 
 	/* Version of HS-I2C Hardware */
 	const struct exynos_hsi2c_variant *variant;
+
+	/*
+	 * The controller is shared with another processor: every transfer
+	 * goes through the batcher, which holds the hardware semaphore for it.
+	 */
+	bool			batcher;
+	unsigned int		batcher_irq;
+	unsigned int		batcher_rx_op;
+	u8			*batcher_rx_buf;
+	unsigned int		batcher_rx_len;
+};
+
+/* One register write of a batcher sequence */
+struct exynos5_i2c_batcher_op {
+	u8 reg;
+	u32 val;
 };
 
 /**
@@ -831,6 +895,284 @@ static int exynos5_i2c_xfer_msg(struct exynos5_i2c *i2c,
 	return ret;
 }
 
+/*
+ * Batcher mode
+ *
+ * On some SoCs the PMIC's bus is shared between the application processor
+ * and the modem. Neither drives the controller directly: each hands the
+ * batcher in front of it a complete transfer as a list of register writes.
+ * The batcher takes a hardware semaphore, programs the controller, runs the
+ * transfer, and releases the semaphore. A transfer therefore has to be one
+ * list: a register read is sent with the register number as an extension of
+ * the address, not as a write followed by a read.
+ */
+
+static unsigned int exynos5_i2c_batcher_op(struct exynos5_i2c_batcher_op *ops,
+					   unsigned int n, u8 reg, u32 val)
+{
+	ops[n].reg = reg;
+	ops[n].val = val;
+
+	return n + 1;
+}
+
+/**
+ * exynos5_i2c_batcher_build() - make the register list of one transfer
+ * @ops: the list, HSI2C_BATCHER_MAX_OPS entries
+ * @addr: 7-bit address of the device
+ * @reg: for a read, the device register to read from
+ * @buf: for a write, the bytes to send
+ * @len: number of bytes to send or to receive, at most HSI2C_BATCHER_MAX_LEN
+ * @read: read @len bytes from @reg instead of writing @buf
+ * @rx_op: for a read, set to the index of the first entry whose payload
+ *	   word receives a byte
+ *
+ * The timing values are those of the vendor kernel for a 2.5 MHz high speed
+ * bus, which is what the other user of the controller works with.
+ *
+ * Return: the number of entries.
+ */
+static unsigned int
+exynos5_i2c_batcher_build(struct exynos5_i2c_batcher_op *ops, u16 addr, u8 reg,
+			  const u8 *buf, unsigned int len, bool read,
+			  unsigned int *rx_op)
+{
+	u32 conf, ctl, i2c_addr, auto_conf, int_en;
+	unsigned int n = 0;
+	unsigned int i;
+
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_HS1, 0x0a0a0a0a);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_HS2, 0x050f0a02);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_HS3, 0x0000000c);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_SLA, 0x00000005);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_FS1, 0x26262600);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_FS2, 0x130f2626);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMING_FS3, 0x0001004c);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TRAILIG_CTL,
+				   HSI2C_BATCHER_TRAILING_COUNT);
+
+	conf = HSI2C_AUTO_MODE | HSI2C_HS_MODE | HSI2C_FILTER_EN_SCL |
+	       HSI2C_FILTER_EN_SDA | HSI2C_FTL_CYCLE_SCL(3) |
+	       HSI2C_FTL_CYCLE_SDA(3) | 0xff;
+	ctl = HSI2C_MASTER;
+	auto_conf = HSI2C_MASTER_RUN | HSI2C_STOP_AFTER_TRANS | len;
+
+	if (read) {
+		/* The register number travels as the low address byte */
+		u32 ext_addr = (addr & 0x7f) << 8 | reg;
+
+		conf |= HSI2C_10BIT_ADDR_MODE;
+		ctl |= HSI2C_RXCHON | HSI2C_EXT_ADDR;
+		if (ext_addr & BIT(14))
+			ctl |= HSI2C_EXT_MSB;
+		i2c_addr = (ext_addr & 0x3fff) << 10;
+		auto_conf |= HSI2C_READ_WRITE;
+		int_en = HSI2C_INT_RX_ALMOSTFULL_EN;
+	} else {
+		ctl |= HSI2C_TXCHON;
+		i2c_addr = (addr & 0x7f) << 10;
+		int_en = HSI2C_INT_TX_ALMOSTEMPTY_EN | HSI2C_INT_TRANS_DONE;
+	}
+
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_CONF, conf);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_TIMEOUT, 0);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_FIFO_CTL,
+				   HSI2C_RXFIFO_EN | HSI2C_TXFIFO_EN |
+				   HSI2C_TXFIFO_TRIGGER_LEVEL(8) |
+				   HSI2C_RXFIFO_TRIGGER_LEVEL(len));
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_CTL, ctl);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_ADDR, i2c_addr);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_AUTO_CONF, auto_conf);
+	n = exynos5_i2c_batcher_op(ops, n, HSI2C_INT_ENABLE, int_en);
+
+	if (read)
+		*rx_op = n;
+
+	for (i = 0; i < len; i++) {
+		if (read)
+			n = exynos5_i2c_batcher_op(ops, n, HSI2C_RX_DATA,
+						   HSI2C_BATCHER_RX_FILL);
+		else
+			n = exynos5_i2c_batcher_op(ops, n, HSI2C_TX_DATA,
+						   buf[i]);
+	}
+
+	return exynos5_i2c_batcher_op(ops, n, HSI2C_BATCHER_OP_END, 0);
+}
+
+/* Hand the list to the batcher: four opcodes per word, one payload word each */
+static void exynos5_i2c_batcher_load(struct exynos5_i2c *i2c,
+				     const struct exynos5_i2c_batcher_op *ops,
+				     unsigned int n)
+{
+	u32 opcodes = 0;
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		unsigned int shift = 8 * (i % 4);
+
+		if (!shift)
+			opcodes = ~0u;
+
+		opcodes &= ~(0xffu << shift);
+		opcodes |= (u32)ops[i].reg << shift;
+		writel(opcodes, i2c->regs + HSI2C_BATCHER_OPCODE + (i / 4) * 4);
+		writel(ops[i].val, i2c->regs + HSI2C_BATCHER_PAYLOAD + i * 4);
+	}
+}
+
+/* The batcher finished a list: collect the result and release it */
+static void exynos5_i2c_batcher_finish(struct exynos5_i2c *i2c)
+{
+	u32 state = readl(i2c->regs + HSI2C_BATCHER_STATE);
+	u32 int_status = readl(i2c->regs + HSI2C_BATCHER_INT_STATUS);
+	unsigned int i;
+
+	if (state & HSI2C_BATCHER_UNEXPECTED_INTR) {
+		i2c->trans_done = -ENXIO;
+	} else {
+		for (i = 0; i < i2c->batcher_rx_len; i++)
+			i2c->batcher_rx_buf[i] =
+				readl(i2c->regs + HSI2C_BATCHER_PAYLOAD +
+				      (i2c->batcher_rx_op + i) * 4);
+		i2c->trans_done = 1;
+	}
+
+	writel(state | HSI2C_BATCHER_OPERATION_COMPLETE,
+	       i2c->regs + HSI2C_BATCHER_STATE);
+	writel(int_status, i2c->regs + HSI2C_BATCHER_INT_STATUS);
+	writel(0, i2c->regs + HSI2C_BATCHER_CON);
+}
+
+static irqreturn_t exynos5_i2c_batcher_irq(int irqno, void *dev_id)
+{
+	struct exynos5_i2c *i2c = dev_id;
+
+	exynos5_i2c_batcher_finish(i2c);
+	complete(&i2c->msg_complete);
+
+	return IRQ_HANDLED;
+}
+
+/* The batcher got stuck in the middle of a list */
+static void exynos5_i2c_batcher_recover(struct exynos5_i2c *i2c, u32 state)
+{
+	dev_warn(i2c->dev,
+		 "batcher timeout: state %#x, fifo %#x, int %#x\n", state,
+		 readl(i2c->regs + HSI2C_BATCHER_FIFO_STATUS),
+		 readl(i2c->regs + HSI2C_BATCHER_INT_STATUS));
+
+	if (state < HSI2C_BATCHER_CONFIG_STATE ||
+	    state > HSI2C_BATCHER_CLEAN_INTR_STATE)
+		return;
+
+	/* It holds the semaphore and has touched the controller */
+	writel(HSI2C_BATCHER_RESET, i2c->regs + HSI2C_BATCHER_CON);
+	writel(0, i2c->regs + HSI2C_BATCHER_CON);
+	if (readl(i2c->regs + HSI2C_BATCHER_STATE) &
+	    HSI2C_BATCHER_OPERATION_COMPLETE)
+		writel(HSI2C_BATCHER_OPERATION_COMPLETE,
+		       i2c->regs + HSI2C_BATCHER_STATE);
+	exynos5_i2c_reset(i2c);
+	writel(0, i2c->regs + HSI2C_BATCHER_CON);
+	writel(1, i2c->regs + HSI2C_SM_RELEASE);
+}
+
+static int exynos5_i2c_batcher_run(struct exynos5_i2c *i2c, u16 addr, u8 reg,
+				   u8 *buf, unsigned int len, bool read)
+{
+	struct exynos5_i2c_batcher_op ops[HSI2C_BATCHER_MAX_OPS];
+	unsigned int timeout_ms = read ? EXYNOS5_BATCHER_RX_TIMEOUT_MS :
+					 EXYNOS5_BATCHER_TX_TIMEOUT_MS;
+	unsigned int rx_op = 0;
+	unsigned int n;
+	u32 state;
+
+	n = exynos5_i2c_batcher_build(ops, addr, reg, buf, len, read, &rx_op);
+
+	i2c->trans_done = 0;
+	i2c->batcher_rx_op = rx_op;
+	i2c->batcher_rx_buf = buf;
+	i2c->batcher_rx_len = read ? len : 0;
+	reinit_completion(&i2c->msg_complete);
+
+	writel(0, i2c->regs + HSI2C_BATCHER_CON);
+	writel(HSI2C_BATCHER_ENABLE | HSI2C_BATCHER_DEDICATE,
+	       i2c->regs + HSI2C_BATCHER_CON);
+	writel(readl(i2c->regs + HSI2C_BATCHER_INT_STATUS),
+	       i2c->regs + HSI2C_BATCHER_INT_STATUS);
+	exynos5_i2c_batcher_load(i2c, ops, n);
+
+	if (!i2c->atomic)
+		enable_irq(i2c->batcher_irq);
+
+	writel(HSI2C_BATCHER_INT_ENABLE, i2c->regs + HSI2C_BATCHER_INT_EN);
+	writel(HSI2C_BATCHER_ENABLE | HSI2C_BATCHER_DEDICATE |
+	       HSI2C_BATCHER_START, i2c->regs + HSI2C_BATCHER_CON);
+
+	if (i2c->atomic) {
+		readl_poll_timeout_atomic(i2c->regs + HSI2C_BATCHER_STATE,
+					  state,
+					  state & (HSI2C_BATCHER_OPERATION_COMPLETE |
+						   HSI2C_BATCHER_UNEXPECTED_INTR),
+					  10, timeout_ms * USEC_PER_MSEC);
+	} else {
+		wait_for_completion_timeout(&i2c->msg_complete,
+					    msecs_to_jiffies(timeout_ms));
+	}
+
+	writel(0, i2c->regs + HSI2C_BATCHER_INT_EN);
+	if (!i2c->atomic)
+		disable_irq(i2c->batcher_irq);
+
+	if (!i2c->trans_done) {
+		/* No interrupt: the result may be there all the same */
+		state = readl(i2c->regs + HSI2C_BATCHER_STATE);
+		if (state & (HSI2C_BATCHER_OPERATION_COMPLETE |
+			     HSI2C_BATCHER_UNEXPECTED_INTR)) {
+			exynos5_i2c_batcher_finish(i2c);
+		} else {
+			exynos5_i2c_batcher_recover(i2c, state);
+			return -ETIMEDOUT;
+		}
+	}
+
+	if (i2c->trans_done < 0) {
+		dev_dbg(i2c->dev, "batcher transfer to %#x failed\n", addr);
+		return i2c->trans_done;
+	}
+
+	return 0;
+}
+
+static int exynos5_i2c_batcher_xfer(struct exynos5_i2c *i2c,
+				    struct i2c_msg *msgs, int num)
+{
+	if (num == 1 && !(msgs[0].flags & (I2C_M_RD | I2C_M_TEN)) &&
+	    msgs[0].len >= 1 && msgs[0].len <= HSI2C_BATCHER_MAX_LEN)
+		return exynos5_i2c_batcher_run(i2c, msgs[0].addr, 0,
+					       msgs[0].buf, msgs[0].len, false);
+
+	if (num == 2 && msgs[0].addr == msgs[1].addr &&
+	    !(msgs[0].flags & (I2C_M_RD | I2C_M_TEN)) && msgs[0].len == 1 &&
+	    (msgs[1].flags & I2C_M_RD) && !(msgs[1].flags & I2C_M_TEN) &&
+	    msgs[1].len >= 1 && msgs[1].len <= HSI2C_BATCHER_MAX_LEN)
+		return exynos5_i2c_batcher_run(i2c, msgs[1].addr,
+					       msgs[0].buf[0], msgs[1].buf,
+					       msgs[1].len, true);
+
+	return -EOPNOTSUPP;
+}
+
+/* What a transfer through the batcher can look like */
+static const struct i2c_adapter_quirks exynos5_i2c_batcher_quirks = {
+	.flags = I2C_AQ_COMB_WRITE_THEN_READ | I2C_AQ_NO_ZERO_LEN,
+	.max_write_len = HSI2C_BATCHER_MAX_LEN,
+	.max_read_len = HSI2C_BATCHER_MAX_LEN,
+	.max_comb_1st_msg_len = 1,
+	.max_comb_2nd_msg_len = HSI2C_BATCHER_MAX_LEN,
+};
+
 static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 			struct i2c_msg *msgs, int num)
 {
@@ -845,11 +1187,18 @@ static int exynos5_i2c_xfer(struct i2c_adapter *adap,
 	if (ret)
 		goto err_pclk;
 
+	if (i2c->batcher) {
+		ret = exynos5_i2c_batcher_xfer(i2c, msgs, num);
+		goto done;
+	}
+
 	for (i = 0; i < num; ++i) {
 		ret = exynos5_i2c_xfer_msg(i2c, msgs + i, i + 1 == num);
 		if (ret)
 			break;
 	}
+
+done:
 
 	clk_disable(i2c->clk);
 err_pclk:
@@ -864,11 +1213,13 @@ static int exynos5_i2c_xfer_atomic(struct i2c_adapter *adap,
 	struct exynos5_i2c *i2c = adap->algo_data;
 	int ret;
 
-	disable_irq(i2c->irq);
+	if (!i2c->batcher)
+		disable_irq(i2c->irq);
 	i2c->atomic = true;
 	ret = exynos5_i2c_xfer(adap, msgs, num);
 	i2c->atomic = false;
-	enable_irq(i2c->irq);
+	if (!i2c->batcher)
+		enable_irq(i2c->irq);
 
 	return ret;
 }
@@ -933,30 +1284,69 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 	i2c->adap.algo_data = i2c;
 	i2c->adap.dev.parent = &pdev->dev;
 
-	/* Clear pending interrupts from u-boot or misc causes */
-	exynos5_i2c_clr_pend_irq(i2c);
-
 	spin_lock_init(&i2c->lock);
 	init_completion(&i2c->msg_complete);
 
-	i2c->irq = ret = platform_get_irq(pdev, 0);
-	if (ret < 0)
-		goto err_clk;
-
-	ret = devm_request_irq(&pdev->dev, i2c->irq, exynos5_i2c_irq,
-			       IRQF_NO_SUSPEND, dev_name(&pdev->dev), i2c);
-	if (ret != 0) {
-		dev_err(&pdev->dev, "cannot request HS-I2C IRQ %d\n", i2c->irq);
-		goto err_clk;
-	}
-
 	i2c->variant = of_device_get_match_data(&pdev->dev);
+	i2c->batcher = of_property_read_bool(np, "samsung,hsi2c-batcher");
 
-	ret = exynos5_hsi2c_clock_setup(i2c);
-	if (ret)
-		goto err_clk;
+	if (i2c->batcher) {
+		/*
+		 * The controller and its interrupt are the batcher's: the
+		 * other user's transfers are going on at any time.
+		 */
+		ret = platform_get_irq(pdev, 1);
+		if (ret < 0)
+			goto err_clk;
+		i2c->batcher_irq = ret;
 
-	exynos5_i2c_reset(i2c);
+		ret = devm_request_irq(&pdev->dev, i2c->batcher_irq,
+				       exynos5_i2c_batcher_irq,
+				       IRQF_NO_SUSPEND | IRQF_NO_AUTOEN,
+				       dev_name(&pdev->dev), i2c);
+		if (ret) {
+			dev_err(&pdev->dev, "cannot request batcher IRQ %d\n",
+				i2c->batcher_irq);
+			goto err_clk;
+		}
+
+		i2c->adap.quirks = &exynos5_i2c_batcher_quirks;
+
+		/*
+		 * The bootloader used the controller through the batcher too.
+		 * A controller interrupt left pending from its last transfer
+		 * would end our first one as an unexpected interrupt. Nothing
+		 * else uses the controller this early: the modem is off.
+		 */
+		exynos5_i2c_clr_pend_irq(i2c);
+		ret = exynos5_hsi2c_clock_setup(i2c);
+		if (ret)
+			goto err_clk;
+
+		exynos5_i2c_reset(i2c);
+	} else {
+		/* Clear pending interrupts from u-boot or misc causes */
+		exynos5_i2c_clr_pend_irq(i2c);
+
+		i2c->irq = ret = platform_get_irq(pdev, 0);
+		if (ret < 0)
+			goto err_clk;
+
+		ret = devm_request_irq(&pdev->dev, i2c->irq, exynos5_i2c_irq,
+				       IRQF_NO_SUSPEND, dev_name(&pdev->dev),
+				       i2c);
+		if (ret != 0) {
+			dev_err(&pdev->dev, "cannot request HS-I2C IRQ %d\n",
+				i2c->irq);
+			goto err_clk;
+		}
+
+		ret = exynos5_hsi2c_clock_setup(i2c);
+		if (ret)
+			goto err_clk;
+
+		exynos5_i2c_reset(i2c);
+	}
 
 	ret = i2c_add_adapter(&i2c->adap);
 	if (ret < 0)
@@ -1011,11 +1401,14 @@ static int exynos5_i2c_resume_noirq(struct device *dev)
 	if (ret)
 		goto err_pclk;
 
-	ret = exynos5_hsi2c_clock_setup(i2c);
-	if (ret)
-		goto err_clk;
+	if (!i2c->batcher) {
+		ret = exynos5_hsi2c_clock_setup(i2c);
+		if (ret)
+			goto err_clk;
 
-	exynos5_i2c_init(i2c);
+		exynos5_i2c_init(i2c);
+	}
+
 	clk_disable(i2c->clk);
 	clk_disable(i2c->pclk);
 	i2c_mark_adapter_resumed(&i2c->adap);
