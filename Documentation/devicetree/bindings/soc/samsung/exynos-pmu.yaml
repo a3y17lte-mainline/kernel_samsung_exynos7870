@@ -225,7 +225,7 @@ allOf:
           patternProperties:
             # Negative look-ahead to disallow unsupported modes. The '$' has to be
             # part of lookahead group to work, instead of trailing outside of ().
-            "^mode-(?!(bootloader$|download$|fastboot$|recovery$))": false
+            "^mode-(?!(bootloader$|download$|fastboot$|normal$|recovery$))": false
 
   - if:
       properties:
