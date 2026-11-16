@@ -13,6 +13,7 @@
 #include <linux/device.h>
 #include <linux/jiffies.h>
 #include <linux/ktime.h>
+#include <linux/sizes.h>
 #include <linux/slab.h>
 
 #include "modem.h"
@@ -489,11 +490,20 @@ static struct exmodem_port *link_find_port(struct exmodem *md, u8 ch)
 	return NULL;
 }
 
+/*
+ * Limits for multi-frame messages: the largest message the modem sends (RFS
+ * NV data, in 2 KiB frames) and the fragments waiting for their last one
+ */
+#define LINK_MSG_MAX	SZ_512K
+#define LINK_FRAGS_MAX	512
+
 static void link_rx_dispatch(struct exmodem *md, const u8 *hdr,
 			     struct sk_buff *skb)
 {
 	struct exmodem_port *port;
+	struct sk_buff *whole;
 	struct sk_buff *tmp;
+	unsigned int len;
 	u8 id;
 
 	mutex_lock(&md->port_lock);
@@ -511,20 +521,45 @@ static void link_rx_dispatch(struct exmodem *md, const u8 *hdr,
 		goto unlock;
 	}
 
-	/* Hand out the fragments of a message once it is complete */
+	/*
+	 * A port hands out whole messages: join the fragments once the last
+	 * one is in (the modem splits RFS messages into 2 KiB frames)
+	 */
 	id = hdr[4] & SIPC5_CTL_ID;
 	skb->cb[0] = id;
+	if (skb_queue_len(&port->frags) >= LINK_FRAGS_MAX) {
+		dev_err_ratelimited(md->dev,
+				    "channel %u: unfinished messages dropped\n",
+				    hdr[1]);
+		__skb_queue_purge(&port->frags);
+	}
 	__skb_queue_tail(&port->frags, skb);
 	if (hdr[4] & SIPC5_CTL_MORE)
 		goto unlock;
+
+	len = 0;
+	skb_queue_walk(&port->frags, tmp)
+		if (tmp->cb[0] == id)
+			len += tmp->len;
+
+	whole = len <= LINK_MSG_MAX ? alloc_skb(len, GFP_KERNEL) : NULL;
+	if (!whole)
+		dev_err_ratelimited(md->dev,
+				    "channel %u: message of %u bytes dropped\n",
+				    hdr[1], len);
 
 	skb_queue_walk_safe(&port->frags, skb, tmp) {
 		if (skb->cb[0] != id)
 			continue;
 
 		__skb_unlink(skb, &port->frags);
-		port->rx(port, skb);
+		if (whole)
+			skb_put_data(whole, skb->data, skb->len);
+		kfree_skb(skb);
 	}
+
+	if (whole)
+		port->rx(port, whole);
 
 unlock:
 	mutex_unlock(&md->port_lock);
