@@ -992,8 +992,14 @@ static int exmodem_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_link;
 
+	ret = exmodem_wwan_init(md);
+	if (ret)
+		goto err_mbox;
+
 	return 0;
 
+err_mbox:
+	exmodem_mbox_free(md);
 err_link:
 	exmodem_link_exit(md);
 err_perf:
@@ -1029,6 +1035,7 @@ static void exmodem_remove(struct platform_device *pdev)
 {
 	struct exmodem *md = platform_get_drvdata(pdev);
 
+	exmodem_wwan_exit(md);
 	exmodem_shutdown(pdev);
 	exmodem_mbox_free(md);
 	cancel_work_sync(&md->active_work);

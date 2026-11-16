@@ -22,6 +22,7 @@
 #include "sipc5.h"
 
 struct cpufreq_policy;
+struct net_device;
 struct devfreq;
 struct device;
 struct regmap;
@@ -198,6 +199,7 @@ struct exmodem {
 	enum exmodem_state state;
 	enum exmodem_link_state link_state;
 	const struct exmodem_frontend *frontend;
+	void *frontend_data;
 	struct completion init_done;	/* modem sent PHONE_START */
 	struct completion off_done;	/* modem reported inactive */
 	struct work_struct active_work;
@@ -258,6 +260,29 @@ void exmodem_set_frontend(struct exmodem *md,
 
 /* boot.c */
 int exmodem_boot(struct exmodem *md);
+
+/* net.c */
+
+/**
+ * struct exmodem_net - a packet data channel as a raw IP interface
+ * @md: the modem
+ * @port: the channel
+ * @ndev: the interface; its ml_priv points back here
+ */
+struct exmodem_net {
+	struct exmodem *md;
+	struct exmodem_port port;
+	struct net_device *ndev;
+};
+
+void exmodem_net_setup(struct net_device *ndev);
+void exmodem_net_init(struct exmodem_net *net, struct exmodem *md,
+		      struct net_device *ndev, u8 ch);
+void exmodem_net_tx_flow(struct net_device *ndev, bool stop);
+
+/* wwan.c */
+int exmodem_wwan_init(struct exmodem *md);
+void exmodem_wwan_exit(struct exmodem *md);
 
 /* link.c */
 int exmodem_link_init(struct exmodem *md);

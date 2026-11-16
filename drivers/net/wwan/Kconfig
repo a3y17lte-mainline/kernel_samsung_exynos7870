@@ -106,7 +106,9 @@ config EXYNOS_MODEM
 	  Samsung IPC version 5 protocol over shared memory.
 
 	  The driver loads and starts the modem and serves its performance
-	  requests.
+	  requests. The modem is controlled through two WWAN ports, one for
+	  Samsung IPC and one for the modem's requests for its non-volatile
+	  data; packet data contexts are WWAN links.
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called exynos_modem.
