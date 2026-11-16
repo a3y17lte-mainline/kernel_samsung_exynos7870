@@ -491,8 +491,8 @@ static struct exmodem_port *link_find_port(struct exmodem *md, u8 ch)
 }
 
 /*
- * Limits for multi-frame messages: the largest message the modem sends (RFS
- * NV data, in 2 KiB frames) and the fragments waiting for their last one
+ * Limits for multi-frame messages: the largest joined message and the
+ * fragments waiting for their last one
  */
 #define LINK_MSG_MAX	SZ_512K
 #define LINK_FRAGS_MAX	512
@@ -522,8 +522,10 @@ static void link_rx_dispatch(struct exmodem *md, const u8 *hdr,
 	}
 
 	/*
-	 * A port hands out whole messages: join the fragments once the last
-	 * one is in (the modem splits RFS messages into 2 KiB frames)
+	 * Join the fragments of a multi-frame message once the last one is
+	 * in, so that a read returns the whole message. Long messages without
+	 * the multi-frame flag (RFS NV data in 2 KiB frames) still come in
+	 * pieces: readers join those by the length in the IPC header
 	 */
 	id = hdr[4] & SIPC5_CTL_ID;
 	skb->cb[0] = id;
