@@ -341,6 +341,21 @@ int exmodem_security(struct exmodem *md, enum exmodem_sec_mode mode,
 	return ret;
 }
 
+static int exmodem_fw_check_info(struct exmodem *md, const void *data)
+{
+	const __le32 *info = data;
+	u32 cp_size = get_unaligned_le32(&info[FW_MEM_INFO_CP_SIZE]);
+	u32 ipc_size = get_unaligned_le32(&info[FW_MEM_INFO_IPC_SIZE]);
+
+	if (cp_size != md->fw_size || ipc_size != md->ipc_size) {
+		dev_err(md->dev, "firmware wants %#x + %#x bytes of memory\n",
+			cp_size, ipc_size);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
 /**
  * exmodem_fw_write() - copy a part of an image into the modem's memory
  * @md: the modem
@@ -357,28 +372,52 @@ int exmodem_fw_write(struct exmodem *md, bool ipc_region, u32 offset,
 {
 	size_t size = ipc_region ? md->ipc_size : md->fw_size;
 	void *base = ipc_region ? md->ipc_base : md->fw_base;
+	int ret;
 
 	if (len > size || offset > size - len)
 		return -EINVAL;
 
 	if (!ipc_region && offset == FW_MEM_INFO_OFFSET &&
 	    len >= FW_MEM_INFO_WORDS * sizeof(__le32)) {
-		const __le32 *info = data;
-		u32 cp_size = get_unaligned_le32(&info[FW_MEM_INFO_CP_SIZE]);
-		u32 ipc_size = get_unaligned_le32(&info[FW_MEM_INFO_IPC_SIZE]);
-
-		if (cp_size != md->fw_size || ipc_size != md->ipc_size) {
-			dev_err(md->dev,
-				"firmware wants %#x + %#x bytes of memory\n",
-				cp_size, ipc_size);
-			return -EFAULT;
-		}
+		ret = exmodem_fw_check_info(md, data);
+		if (ret)
+			return ret;
 	}
 
 	guard(mutex)(&md->lock);
 	memcpy(base + offset, data, len);
 
 	return 0;
+}
+
+/**
+ * exmodem_fw_buf() - where a part of the firmware goes in the modem's memory
+ * @md: the modem
+ * @offset: offset in the firmware region
+ * @len: size of the part
+ *
+ * For loading a part directly into the modem's memory. The caller checks the
+ * result with exmodem_fw_check() once all parts are loaded.
+ *
+ * Return: the address, or NULL if the part does not fit.
+ */
+void *exmodem_fw_buf(struct exmodem *md, u32 offset, u32 len)
+{
+	if (len > md->fw_size || offset > md->fw_size - len)
+		return NULL;
+
+	return md->fw_base + offset;
+}
+
+/**
+ * exmodem_fw_check() - check the loaded firmware against the memory layout
+ * @md: the modem
+ *
+ * Return: 0 or -EFAULT if the firmware was built for other region sizes.
+ */
+int exmodem_fw_check(struct exmodem *md)
+{
+	return exmodem_fw_check_info(md, md->fw_base + FW_MEM_INFO_OFFSET);
 }
 
 /**
@@ -962,6 +1001,18 @@ err_perf:
 	return ret;
 }
 
+/**
+ * exmodem_stop() - cut the modem's power without waiting for it
+ * @md: the modem
+ */
+void exmodem_stop(struct exmodem *md)
+{
+	exmodem_irq_set(md, md->irq_wdt, &md->irq_wdt_enabled, false);
+	exmodem_irq_set(md, md->irq_fail, &md->irq_fail_enabled, false);
+	exmodem_power_off(md);
+	exmodem_set_state(md, EXMODEM_OFFLINE);
+}
+
 /* Give the modem the time to shut down that its software asked for */
 static void exmodem_shutdown(struct platform_device *pdev)
 {
@@ -971,10 +1022,7 @@ static void exmodem_shutdown(struct platform_device *pdev)
 	    !wait_for_completion_timeout(&md->off_done, OFF_TIMEOUT))
 		dev_warn(md->dev, "the modem did not shut down\n");
 
-	exmodem_irq_set(md, md->irq_wdt, &md->irq_wdt_enabled, false);
-	exmodem_irq_set(md, md->irq_fail, &md->irq_fail_enabled, false);
-	exmodem_power_off(md);
-	exmodem_set_state(md, EXMODEM_OFFLINE);
+	exmodem_stop(md);
 }
 
 static void exmodem_remove(struct platform_device *pdev)

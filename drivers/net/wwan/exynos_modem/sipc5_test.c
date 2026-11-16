@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * KUnit tests for the SIPC5 frame and ring buffer helpers
+ * KUnit tests for the SIPC5 frame and ring buffer helpers and the firmware
+ * image's table of contents
  */
 
 #include <kunit/test.h>
+#include <linux/unaligned.h>
 
+#include "fw.h"
 #include "sipc5.h"
 
 #define TEST_RING_SIZE	64
@@ -284,6 +287,79 @@ static void sipc_ring_test_frames(struct kunit *test)
 	sipc_test_guard(test, tr);
 }
 
+static void toc_test_put(u8 *toc, int i, const char *name, u32 offset,
+			 u32 load_addr, u32 size)
+{
+	u8 *e = toc + i * EXMODEM_TOC_ENTRY_SIZE;
+
+	strscpy_pad(e, name, EXMODEM_TOC_NAME_LEN);
+	put_unaligned_le32(offset, e + 12);
+	put_unaligned_le32(load_addr, e + 16);
+	put_unaligned_le32(size, e + 20);
+	put_unaligned_le32(0xdeadbeef, e + 24);
+	put_unaligned_le32(i, e + 28);
+}
+
+/* The layout of the Galaxy A3 (2017) image */
+static u8 *toc_test_alloc(struct kunit *test)
+{
+	u8 *toc = kunit_kzalloc(test, EXMODEM_TOC_SIZE, GFP_KERNEL);
+
+	KUNIT_ASSERT_NOT_NULL(test, toc);
+	toc_test_put(toc, 0, "TOC", 0, 0, 0x200);
+	toc_test_put(toc, 1, "BOOT", 0x200, 0x40000000, 0x170c);
+	toc_test_put(toc, 2, "MAIN", 0x1920, 0x40010000, 0x2479508);
+	toc_test_put(toc, 3, "NV", 0, 0x44900000, 0x100000);
+	toc_test_put(toc, 4, "OFFSET", 0x7aa00, 0, 0x85600);
+
+	return toc;
+}
+
+static void toc_test_find(struct kunit *test)
+{
+	struct exmodem_toc_entry e;
+	u8 *toc = toc_test_alloc(test);
+
+	KUNIT_ASSERT_EQ(test, exmodem_toc_find(toc, EXMODEM_TOC_SIZE, "MAIN", &e),
+			0);
+	KUNIT_EXPECT_EQ(test, e.offset, 0x1920);
+	KUNIT_EXPECT_EQ(test, e.load_addr, 0x40010000);
+	KUNIT_EXPECT_EQ(test, e.size, 0x2479508);
+
+	KUNIT_ASSERT_EQ(test, exmodem_toc_find(toc, EXMODEM_TOC_SIZE, "NV", &e),
+			0);
+	KUNIT_EXPECT_EQ(test, e.load_addr, 0x44900000);
+	KUNIT_EXPECT_EQ(test, e.size, 0x100000);
+}
+
+static void toc_test_names(struct kunit *test)
+{
+	struct exmodem_toc_entry e;
+	u8 *toc = toc_test_alloc(test);
+
+	/* A prefix of a name is not a match, nor is a longer name */
+	KUNIT_EXPECT_EQ(test, exmodem_toc_find(toc, EXMODEM_TOC_SIZE, "N", &e),
+			-ENOENT);
+	KUNIT_EXPECT_EQ(test, exmodem_toc_find(toc, EXMODEM_TOC_SIZE, "NVX", &e),
+			-ENOENT);
+	KUNIT_EXPECT_EQ(test, exmodem_toc_find(toc, EXMODEM_TOC_SIZE, "BOO", &e),
+			-ENOENT);
+	KUNIT_EXPECT_EQ(test,
+			exmodem_toc_find(toc, EXMODEM_TOC_SIZE,
+					 "NAME_TOO_LONG", &e),
+			-EINVAL);
+}
+
+static void toc_test_short(struct kunit *test)
+{
+	struct exmodem_toc_entry e;
+	u8 *toc = toc_test_alloc(test);
+
+	KUNIT_EXPECT_EQ(test,
+			exmodem_toc_find(toc, EXMODEM_TOC_SIZE - 1, "BOOT", &e),
+			-EINVAL);
+}
+
 static struct kunit_case sipc5_test_cases[] = {
 	KUNIT_CASE(sipc5_test_hdr_min),
 	KUNIT_CASE(sipc5_test_hdr_padded),
@@ -296,6 +372,9 @@ static struct kunit_case sipc5_test_cases[] = {
 	KUNIT_CASE(sipc_ring_test_full),
 	KUNIT_CASE(sipc_ring_test_bad_index),
 	KUNIT_CASE(sipc_ring_test_frames),
+	KUNIT_CASE(toc_test_find),
+	KUNIT_CASE(toc_test_names),
+	KUNIT_CASE(toc_test_short),
 	{ }
 };
 

@@ -244,14 +244,20 @@ int exmodem_security(struct exmodem *md, enum exmodem_sec_mode mode,
 		     u32 size_boot, u32 size_main);
 int exmodem_fw_write(struct exmodem *md, bool ipc_region, u32 offset,
 		     const void *data, u32 len);
+void *exmodem_fw_buf(struct exmodem *md, u32 offset, u32 len);
+int exmodem_fw_check(struct exmodem *md);
 int exmodem_power_on(struct exmodem *md);
 int exmodem_power_off(struct exmodem *md);
 int exmodem_boot_on(struct exmodem *md);
 int exmodem_dl_start(struct exmodem *md);
 int exmodem_boot_off(struct exmodem *md);
 int exmodem_dump_start(struct exmodem *md);
+void exmodem_stop(struct exmodem *md);
 void exmodem_set_frontend(struct exmodem *md,
 			  const struct exmodem_frontend *frontend);
+
+/* boot.c */
+int exmodem_boot(struct exmodem *md);
 
 /* link.c */
 int exmodem_link_init(struct exmodem *md);

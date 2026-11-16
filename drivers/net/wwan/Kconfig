@@ -99,6 +99,7 @@ config EXYNOS_MODEM
 	depends on HAVE_ARM_SMCCC
 	depends on MAILBOX
 	depends on PM
+	select FW_LOADER
 	help
 	  Interface to the cellular modem (communication processor) that is
 	  integrated in Samsung Exynos SoCs such as the Exynos7870, with the
