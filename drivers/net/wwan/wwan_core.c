@@ -342,6 +342,14 @@ static const struct {
 		.name = "MIPC",
 		.devsuf = "mipc",
 	},
+	[WWAN_PORT_SIPC] = {
+		.name = "SIPC",
+		.devsuf = "sipc",
+	},
+	[WWAN_PORT_SIPC_RFS] = {
+		.name = "SIPC-RFS",
+		.devsuf = "sipcrfs",
+	},
 };
 
 static ssize_t type_show(struct device *dev, struct device_attribute *attr,
