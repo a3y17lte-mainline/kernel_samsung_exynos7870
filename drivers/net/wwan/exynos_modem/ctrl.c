@@ -740,11 +740,19 @@ static int exmodem_perf_init(struct exmodem *md)
 		if (!device_property_present(dev, props[i]))
 			continue;
 
+		/*
+		 * -ENODEV means the bus' devfreq is not registered yet: the
+		 * phandle has no device link, so nothing orders the probes
+		 */
 		devfreq = devfreq_get_devfreq_by_phandle(dev, props[i], 0);
-		if (IS_ERR(devfreq))
-			return dev_err_probe(dev, PTR_ERR(devfreq),
+		if (IS_ERR(devfreq)) {
+			ret = PTR_ERR(devfreq);
+			if (ret == -ENODEV)
+				ret = -EPROBE_DEFER;
+			return dev_err_probe(dev, ret,
 					     "no devfreq device for %s\n",
 					     props[i]);
+		}
 
 		ret = dev_pm_qos_add_request(devfreq->dev.parent,
 					     &md->bus_qos[i],
