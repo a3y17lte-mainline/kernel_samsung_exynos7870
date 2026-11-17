@@ -13,6 +13,7 @@
 #include <linux/device.h>
 #include <linux/jiffies.h>
 #include <linux/ktime.h>
+#include <linux/pm_wakeup.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
 
@@ -497,6 +498,9 @@ static struct exmodem_port *link_find_port(struct exmodem *md, u8 ch)
 #define LINK_MSG_MAX	SZ_512K
 #define LINK_FRAGS_MAX	512
 
+/* How long a message from the modem keeps the system awake */
+#define LINK_RX_WAKE_MS	500
+
 static void link_rx_dispatch(struct exmodem *md, const u8 *hdr,
 			     struct sk_buff *skb)
 {
@@ -750,6 +754,13 @@ static void link_rx_work(struct work_struct *work)
 void exmodem_link_irq(struct exmodem *md)
 {
 	u16 msg = exmodem_issr_read(md, EXMODEM_ISSR_CP2AP_MSG);
+
+	/*
+	 * The mailbox interrupt wakes the system (an incoming call or SMS);
+	 * stay up long enough for the frames to reach their reader, as the
+	 * vendor driver does for IPC and packet data.
+	 */
+	pm_wakeup_dev_event(md->dev, LINK_RX_WAKE_MS, false);
 
 	if (!kfifo_put(&md->rx_fifo, msg))
 		dev_err_ratelimited(md->dev, "message word %#x lost\n", msg);

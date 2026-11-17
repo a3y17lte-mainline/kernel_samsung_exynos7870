@@ -24,6 +24,7 @@
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/pm_wakeup.h>
 #include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/soc/samsung/exynos-pmu.h>
@@ -937,6 +938,11 @@ static int exmodem_probe(struct platform_device *pdev)
 	INIT_WORK(&md->active_work, exmodem_active_work);
 	platform_set_drvdata(pdev, md);
 
+	/* Messages from the modem hold the system awake for their readers */
+	ret = devm_device_init_wakeup(dev);
+	if (ret)
+		return ret;
+
 	device_property_read_u32(dev, "samsung,board-revision", &md->board_rev);
 	md->dual_sim = device_property_read_bool(dev, "samsung,dual-sim");
 
@@ -1057,7 +1063,10 @@ static void exmodem_remove(struct platform_device *pdev)
 	exmodem_perf_exit(md);
 }
 
-/* The modem keeps running while the application processor sleeps */
+/*
+ * The modem keeps running while the application processor sleeps; it is
+ * told so, and its messages wake the system through the mailbox.
+ */
 static int exmodem_suspend(struct device *dev)
 {
 	struct exmodem *md = dev_get_drvdata(dev);
